@@ -1,0 +1,101 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "langchain-youdotcom"
+version = "0.1.0"
+description = "An integration package connecting You.com and LangChain"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.10.0,<4.0.0"
+dependencies = [
+    "langchain-core>=1.0.0,<2.0.0",
+    "youdotcom>=2.2.0,<3.0.0",
+]
+
+[project.urls]
+Source = "https://github.com/youdotcom-oss/langchain-youdotcom"
+Tracker = "https://github.com/youdotcom-oss/langchain-youdotcom/issues"
+
+[dependency-groups]
+test = [
+    "pytest>=7.3.0,<8.0.0",
+    "pytest-mock>=3.10.0,<4.0.0",
+    "pytest-watcher>=0.3.4,<1.0.0",
+    "pytest-asyncio>=0.21.1,<1.0.0",
+    "pytest-benchmark",
+    "freezegun>=1.2.2,<2.0.0",
+    "syrupy>=4.0.2,<5.0.0",
+    "langchain-core",
+]
+lint = ["ruff>=0.13.1,<0.14.0"]
+dev = ["langchain-core"]
+typing = ["mypy>=1.10.0,<2.0.0", "langchain-core"]
+
+[tool.ruff]
+target-version = "py310"
+
+[tool.ruff.lint]
+select = [
+    "A",
+    "ASYNC",
+    "C4",
+    "COM",
+    "D",
+    "E",
+    "EM",
+    "F",
+    "FA",
+    "FBT",
+    "FLY",
+    "I",
+    "ICN",
+    "INT",
+    "ISC",
+    "PGH",
+    "PIE",
+    "PERF",
+    "PYI",
+    "Q",
+    "RET",
+    "RSE",
+    "RUF",
+    "S",
+    "SLF",
+    "SLOT",
+    "SIM",
+    "T10",
+    "T20",
+    "TID",
+    "UP",
+    "W",
+    "YTT",
+]
+ignore = ["COM812", "ISC001", "PERF203", "S112", "RUF012", "SLF001"]
+unfixable = ["B028"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+ignore-var-parameters = true
+
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = "all"
+
+[tool.ruff.lint.extend-per-file-ignores]
+"tests/**/*.py" = ["S101", "S311"]
+"scripts/*.py" = ["INP001"]
+
+[tool.ruff.format]
+docstring-code-format = true
+
+[tool.mypy]
+disallow_untyped_defs = "True"
+
+[tool.pytest.ini_options]
+addopts = "--snapshot-warn-unused --strict-markers --strict-config --durations=5"
+markers = [
+    "requires: mark tests as requiring a specific library",
+    "compile: mark placeholder test used to compile integration tests without running them",
+]
+asyncio_mode = "auto"
