@@ -26,8 +26,8 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://api.you.com"
-Documentation = "https://documentation.you.com"
+Homepage = "https://you.com"
+Documentation = "https://docs.you.com"
 Repository = "https://github.com/youdotcom-oss/langchain-youdotcom"
 Issues = "https://github.com/youdotcom-oss/langchain-youdotcom/issues"
 Changelog = "https://github.com/youdotcom-oss/langchain-youdotcom/releases"

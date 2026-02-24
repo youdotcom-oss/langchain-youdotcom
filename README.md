@@ -14,7 +14,7 @@ pip install -U langchain-youdotcom
 
 ## Credentials
 
-Get an API key at [api.you.com](https://api.you.com), then set it as an environment variable:
+Get an API key at [you.com/platform/api-keys](https://you.com/platform/api-keys), then set it as an environment variable:
 
 ```bash
 export YDC_API_KEY="your-api-key"
@@ -124,8 +124,8 @@ Async variants are available as `results_async`, `raw_results_async`, and `conte
 
 ## Documentation
 
-- [You.com API docs](https://documentation.you.com)
-- [You.com API dashboard](https://api.you.com)
+- [You.com API docs](https://docs.you.com)
+- [You.com API keys](https://you.com/platform/api-keys)
 
 ## Development
 
