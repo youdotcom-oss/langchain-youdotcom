@@ -23,12 +23,12 @@ class TestYouRetriever:
         """Retriever initializes without arguments."""
         monkeypatch.delenv("YDC_API_KEY", raising=False)
         retriever = YouRetriever()
-        assert retriever.ydc_api_key == ""
+        assert retriever.ydc_api_key.get_secret_value() == ""
 
     def test_init_with_api_key(self) -> None:
         """Retriever accepts an explicit API key."""
         retriever = YouRetriever(ydc_api_key="test-key")
-        assert retriever.ydc_api_key == "test-key"
+        assert retriever.ydc_api_key.get_secret_value() == "test-key"
 
     def test_inherits_search_config(self) -> None:
         """Retriever exposes search wrapper config fields."""

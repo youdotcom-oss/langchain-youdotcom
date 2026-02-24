@@ -109,6 +109,7 @@ docstring-code-format = true
 
 [tool.mypy]
 disallow_untyped_defs = "True"
+plugins = ["pydantic.mypy"]
 
 [tool.pytest.ini_options]
 addopts = "--snapshot-warn-unused --strict-markers --strict-config --durations=5"

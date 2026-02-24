@@ -26,7 +26,7 @@ class TestInit:
         os.environ.pop("YDC_API_KEY", None)
         try:
             wrapper = YouSearchAPIWrapper()
-            assert wrapper.ydc_api_key == ""
+            assert wrapper.ydc_api_key.get_secret_value() == ""
         finally:
             os.environ.clear()
             os.environ.update(env)
@@ -34,13 +34,13 @@ class TestInit:
     def test_init_with_explicit_key(self) -> None:
         """Wrapper accepts an explicit API key."""
         wrapper = YouSearchAPIWrapper(ydc_api_key="test-key")
-        assert wrapper.ydc_api_key == "test-key"
+        assert wrapper.ydc_api_key.get_secret_value() == "test-key"
 
     def test_init_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Wrapper reads YDC_API_KEY from environment."""
         monkeypatch.setenv("YDC_API_KEY", "env-key")
         wrapper = YouSearchAPIWrapper()
-        assert wrapper.ydc_api_key == "env-key"
+        assert wrapper.ydc_api_key.get_secret_value() == "env-key"
 
     def test_explicit_key_takes_precedence(
         self, monkeypatch: pytest.MonkeyPatch
@@ -48,7 +48,7 @@ class TestInit:
         """Explicit key overrides environment variable."""
         monkeypatch.setenv("YDC_API_KEY", "env-key")
         wrapper = YouSearchAPIWrapper(ydc_api_key="explicit-key")
-        assert wrapper.ydc_api_key == "explicit-key"
+        assert wrapper.ydc_api_key.get_secret_value() == "explicit-key"
 
 
 class TestSearchParsing:
@@ -204,7 +204,7 @@ class TestSDKIntegration:
         wrapper = YouSearchAPIWrapper(ydc_api_key="test-key", count=5)
         docs = wrapper.results("test query")
 
-        mock_you_cls.assert_called_once_with(api_key_auth="test-key")
+        assert mock_you_cls.call_args.kwargs["api_key_auth"] == "test-key"
         mock_client.search.unified.assert_called_once_with(query="test query", count=5)
         assert len(docs) == 1
 

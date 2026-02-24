@@ -5,8 +5,9 @@ from __future__ import annotations
 import os
 from typing import TYPE_CHECKING, Any
 
+import httpx
 from langchain_core.documents import Document
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, SecretStr, model_validator
 from youdotcom import You
 from youdotcom.models import ContentsFormats
 
@@ -32,7 +33,9 @@ class YouSearchAPIWrapper(BaseModel):
             docs = wrapper.results("latest AI news")
     """
 
-    ydc_api_key: str = Field(default="", description="You.com API key.")
+    ydc_api_key: SecretStr = Field(
+        default=SecretStr(""), description="You.com API key."
+    )
     count: int | None = Field(default=None, description="Max results per section.")
     safesearch: str | None = Field(
         default=None,
@@ -66,7 +69,12 @@ class YouSearchAPIWrapper(BaseModel):
         return values
 
     def _make_client(self) -> You:
-        return You(api_key_auth=self.ydc_api_key)
+        ua = {"user-agent": "langchain-youdotcom/0.1.0"}
+        return You(
+            api_key_auth=self.ydc_api_key.get_secret_value(),
+            client=httpx.Client(headers=ua),
+            async_client=httpx.AsyncClient(headers=ua),
+        )
 
     def _search_params(self, query: str) -> dict[str, Any]:
         params: dict[str, Any] = {"query": query}
