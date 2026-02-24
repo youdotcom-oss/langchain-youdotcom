@@ -8,6 +8,17 @@ version = "0.1.0"
 description = "An integration package connecting You.com and LangChain"
 readme = "README.md"
 license = { text = "MIT" }
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
 requires-python = ">=3.10.0,<4.0.0"
 dependencies = [
     "langchain-core>=1.0.0,<2.0.0",
@@ -15,8 +26,11 @@ dependencies = [
 ]
 
 [project.urls]
-Source = "https://github.com/youdotcom-oss/langchain-youdotcom"
-Tracker = "https://github.com/youdotcom-oss/langchain-youdotcom/issues"
+Homepage = "https://api.you.com"
+Documentation = "https://documentation.you.com"
+Repository = "https://github.com/youdotcom-oss/langchain-youdotcom"
+Issues = "https://github.com/youdotcom-oss/langchain-youdotcom/issues"
+Changelog = "https://github.com/youdotcom-oss/langchain-youdotcom/releases"
 
 [dependency-groups]
 test = [
@@ -29,9 +43,13 @@ test = [
     "syrupy>=4.0.2,<5.0.0",
     "langchain-core",
 ]
+test_integration = ["langchain-core"]
 lint = ["ruff>=0.13.1,<0.14.0"]
 dev = ["langchain-core"]
 typing = ["mypy>=1.10.0,<2.0.0", "langchain-core"]
+
+[tool.coverage.run]
+omit = ["tests/*"]
 
 [tool.ruff]
 target-version = "py310"
