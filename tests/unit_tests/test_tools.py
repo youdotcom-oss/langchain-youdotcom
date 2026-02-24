@@ -2,10 +2,17 @@
 
 from __future__ import annotations
 
-import pytest
+from unittest.mock import MagicMock, patch
+
+from langchain_core.documents import Document
 from langchain_core.tools import BaseTool
 
-from langchain_youdotcom import YouContentsTool, YouSearchTool
+from langchain_youdotcom import YouContentsTool, YouSearchAPIWrapper, YouSearchTool
+from tests.unit_tests.conftest import (
+    make_contents_page,
+    make_search_response,
+    make_web_hit,
+)
 
 
 class TestYouSearchTool:
@@ -25,11 +32,46 @@ class TestYouSearchTool:
         tool = YouSearchTool()
         assert len(tool.description) > 0
 
-    def test_run_raises_not_implemented(self) -> None:
-        """Stub implementation raises NotImplementedError."""
+    @patch("langchain_youdotcom._utilities.You")
+    def test_run_returns_formatted_results(self, mock_you_cls: MagicMock) -> None:
+        """_run delegates to api_wrapper.results and formats output."""
+        response = make_search_response(
+            web=[
+                make_web_hit(
+                    url="https://a.com",
+                    title="A",
+                    snippets=["content a"],
+                ),
+            ]
+        )
+        mock_client = MagicMock()
+        mock_client.search.unified.return_value = response
+        mock_client.__enter__ = MagicMock(return_value=mock_client)
+        mock_client.__exit__ = MagicMock(return_value=False)
+        mock_you_cls.return_value = mock_client
+
         tool = YouSearchTool()
-        with pytest.raises(NotImplementedError):
-            tool._run("test query")
+        result = tool._run("test query")
+
+        assert isinstance(result, str)
+        assert "content a" in result
+
+    def test_run_with_patched_wrapper(self) -> None:
+        """_run delegates to the api_wrapper."""
+        docs = [
+            Document(
+                page_content="hello",
+                metadata={"title": "T", "url": "https://x.com"},
+            )
+        ]
+        with patch.object(
+            YouSearchAPIWrapper, "results", return_value=docs
+        ) as mock_results:
+            tool = YouSearchTool()
+            result = tool._run("test")
+
+        mock_results.assert_called_once_with("test")
+        assert "hello" in result
 
 
 class TestYouContentsTool:
@@ -49,8 +91,39 @@ class TestYouContentsTool:
         tool = YouContentsTool()
         assert len(tool.description) > 0
 
-    def test_run_raises_not_implemented(self) -> None:
-        """Stub implementation raises NotImplementedError."""
+    @patch("langchain_youdotcom._utilities.You")
+    def test_run_returns_formatted_contents(self, mock_you_cls: MagicMock) -> None:
+        """_run delegates to api_wrapper.contents and formats output."""
+        page = make_contents_page(
+            url="https://example.com",
+            title="Example",
+            markdown="# Page Content",
+        )
+        mock_client = MagicMock()
+        mock_client.contents.generate.return_value = [page]
+        mock_client.__enter__ = MagicMock(return_value=mock_client)
+        mock_client.__exit__ = MagicMock(return_value=False)
+        mock_you_cls.return_value = mock_client
+
         tool = YouContentsTool()
-        with pytest.raises(NotImplementedError):
-            tool._run("https://example.com")
+        result = tool._run(["https://example.com"])
+
+        assert isinstance(result, str)
+        assert "# Page Content" in result
+
+    def test_run_with_patched_wrapper(self) -> None:
+        """_run delegates to the api_wrapper."""
+        docs = [
+            Document(
+                page_content="page text",
+                metadata={"title": "P", "url": "https://x.com"},
+            )
+        ]
+        with patch.object(
+            YouSearchAPIWrapper, "contents", return_value=docs
+        ) as mock_contents:
+            tool = YouContentsTool()
+            result = tool._run(["https://x.com"])
+
+        mock_contents.assert_called_once_with(["https://x.com"])
+        assert "page text" in result

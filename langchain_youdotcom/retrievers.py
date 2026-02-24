@@ -4,19 +4,31 @@ from __future__ import annotations
 
 from typing import Any
 
-from langchain_core.callbacks import CallbackManagerForRetrieverRun
+from langchain_core.callbacks import (
+    AsyncCallbackManagerForRetrieverRun,
+    CallbackManagerForRetrieverRun,
+)
 from langchain_core.documents import Document
 from langchain_core.retrievers import BaseRetriever
 
+from langchain_youdotcom._utilities import YouSearchAPIWrapper
 
-class YouRetriever(BaseRetriever):
+
+class YouRetriever(BaseRetriever, YouSearchAPIWrapper):
     """Retriever that uses the You.com Search API.
 
-    Requires a ``YDC_API_KEY`` environment variable.
-    """
+    Inherits all configuration fields from
+    :class:`~langchain_youdotcom.YouSearchAPIWrapper` (``ydc_api_key``,
+    ``k``, ``count``, ``livecrawl``, etc.).
 
-    ydc_api_key: str = ""
-    """You.com API key."""
+    Example:
+        .. code-block:: python
+
+            from langchain_youdotcom import YouRetriever
+
+            retriever = YouRetriever(ydc_api_key="...")
+            docs = retriever.invoke("latest AI news")
+    """
 
     def _get_relevant_documents(
         self,
@@ -34,8 +46,24 @@ class YouRetriever(BaseRetriever):
 
         Returns:
             A list of relevant documents.
-
-        Raises:
-            NotImplementedError: Stub — will be implemented in DX-335.
         """
-        raise NotImplementedError
+        return self.results(query)
+
+    async def _aget_relevant_documents(
+        self,
+        query: str,
+        *,
+        run_manager: AsyncCallbackManagerForRetrieverRun,
+        **kwargs: Any,
+    ) -> list[Document]:
+        """Async retrieve documents from You.com Search.
+
+        Args:
+            query: The search query.
+            run_manager: Async callback manager for the retriever run.
+            **kwargs: Additional keyword arguments.
+
+        Returns:
+            A list of relevant documents.
+        """
+        return await self.results_async(query)
