@@ -4,7 +4,7 @@
 [![PyPI - License](https://img.shields.io/pypi/l/langchain-youdotcom)](https://opensource.org/licenses/MIT)
 [![PyPI - Downloads](https://img.shields.io/pepy/dt/langchain-youdotcom)](https://pypistats.org/packages/langchain-youdotcom)
 
-LangChain partner package for [You.com](https://you.com) search and content APIs.
+LangChain partner package for [You.com](https://you.com) search, content, and research APIs.
 
 ## Installation
 
