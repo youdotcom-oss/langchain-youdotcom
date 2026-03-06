@@ -1,4 +1,4 @@
-"""Integration tests for YouSearchTool and YouContentsTool."""
+"""Integration tests for YouSearchTool, YouResearchTool, and YouContentsTool."""
 
 from __future__ import annotations
 
