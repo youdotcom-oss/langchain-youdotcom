@@ -1,4 +1,4 @@
-"""You.com Search API wrapper."""
+"""You.com Search, Contents, and Research API wrapper."""
 
 from __future__ import annotations
 
