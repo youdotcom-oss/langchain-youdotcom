@@ -381,6 +381,7 @@ class YouSearchAPIWrapper(BaseModel):
 
     @staticmethod
     def _format_research_response(response: ResearchResponse) -> str:
+        """Format a research response as markdown content with a numbered sources section."""
         parts: list[str] = [response.output.content]
         if response.output.sources:
             lines = ["", "## Sources", ""]
