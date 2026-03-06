@@ -229,6 +229,8 @@ class TestSDKIntegration:
     @patch("langchain_youdotcom._utilities.You")
     def test_raw_research_calls_sdk(self, mock_you_cls: MagicMock) -> None:
         """raw_research() creates a client and calls client.research."""
+        from youdotcom.models import ResearchEffort
+
         response = make_research_response()
         mock_client = MagicMock()
         mock_client.research.return_value = response
@@ -242,6 +244,7 @@ class TestSDKIntegration:
         mock_client.research.assert_called_once()
         call_kwargs = mock_client.research.call_args.kwargs
         assert call_kwargs["input"] == "test query"
+        assert call_kwargs["research_effort"] == ResearchEffort.LITE
         assert result.output.content == "Research answer with [1] citations."
 
     @patch("langchain_youdotcom._utilities.You")
