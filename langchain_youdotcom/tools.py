@@ -17,6 +17,12 @@ class YouSearchInput(BaseModel):
     query: str = Field(description="Search query to look up on You.com.")
 
 
+class YouResearchInput(BaseModel):
+    """Input schema for :class:`YouResearchTool`."""
+
+    query: str = Field(description="Research query to investigate with You.com.")
+
+
 class YouContentsInput(BaseModel):
     """Input schema for :class:`YouContentsTool`."""
 
@@ -77,12 +83,6 @@ class YouSearchTool(BaseTool):
             Search results formatted as a string.
         """
         return _format_docs(await self.api_wrapper.results_async(query))
-
-
-class YouResearchInput(BaseModel):
-    """Input schema for :class:`YouResearchTool`."""
-
-    query: str = Field(description="Research query to investigate with You.com.")
 
 
 class YouResearchTool(BaseTool):
