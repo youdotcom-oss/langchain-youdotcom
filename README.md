@@ -70,6 +70,28 @@ result = tool.invoke("what is retrieval augmented generation")
 print(result)
 ```
 
+### YouResearchTool
+
+Get comprehensive, research-grade answers with cited sources.
+
+```python
+from langchain_youdotcom import YouResearchTool
+
+tool = YouResearchTool()
+result = tool.invoke("what are the latest advances in quantum computing")
+print(result)
+```
+
+Control research depth with `research_effort` (lite, standard, deep, exhaustive):
+
+```python
+from langchain_youdotcom import YouResearchTool, YouSearchAPIWrapper
+
+tool = YouResearchTool(
+    api_wrapper=YouSearchAPIWrapper(research_effort="deep"),
+)
+```
+
 ### YouContentsTool
 
 Fetch and extract content from web pages.
@@ -120,7 +142,17 @@ pages = wrapper.contents(
 )
 ```
 
-Async variants are available as `results_async`, `raw_results_async`, and `contents_async`.
+Research API:
+
+```python
+# research -> formatted markdown with sources
+text = wrapper.research_text("explain quantum entanglement")
+
+# raw SDK response
+raw = wrapper.raw_research("explain quantum entanglement")
+```
+
+Async variants are available for all methods (`results_async`, `raw_results_async`, `contents_async`, `research_text_async`, `raw_research_async`).
 
 ## Documentation
 

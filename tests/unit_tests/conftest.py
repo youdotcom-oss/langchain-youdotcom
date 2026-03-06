@@ -74,6 +74,35 @@ def make_livecrawl_contents(
     return contents
 
 
+def make_research_source(
+    *,
+    url: str = "https://example.com",
+    title: str | None = "Example Source",
+    snippets: list[str] | None = None,
+) -> MagicMock:
+    """Build a mock Source matching the SDK's ``Source`` model."""
+    source = MagicMock()
+    source.url = url
+    source.title = title
+    source.snippets = snippets
+    return source
+
+
+def make_research_response(
+    *,
+    content: str = "Research answer with [1] citations.",
+    sources: list[Any] | None = None,
+) -> MagicMock:
+    """Build a mock ResearchResponse matching the SDK's model."""
+    response = MagicMock()
+    output = MagicMock()
+    output.content = content
+    output.content_type = "text"
+    output.sources = sources if sources is not None else [make_research_source()]
+    response.output = output
+    return response
+
+
 def make_contents_page(
     *,
     url: str = "https://example.com",
