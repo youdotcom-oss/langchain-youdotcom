@@ -2,10 +2,11 @@
 
 from langchain_youdotcom._utilities import YouSearchAPIWrapper
 from langchain_youdotcom.retrievers import YouRetriever
-from langchain_youdotcom.tools import YouContentsTool, YouSearchTool
+from langchain_youdotcom.tools import YouContentsTool, YouResearchTool, YouSearchTool
 
 __all__ = [
     "YouContentsTool",
+    "YouResearchTool",
     "YouRetriever",
     "YouSearchAPIWrapper",
     "YouSearchTool",

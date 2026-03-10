@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -12,6 +12,8 @@ from tests.unit_tests.conftest import (
     make_contents_page,
     make_livecrawl_contents,
     make_news_hit,
+    make_research_response,
+    make_research_source,
     make_search_response,
     make_web_hit,
 )
@@ -223,3 +225,113 @@ class TestSDKIntegration:
 
         mock_client.contents.generate.assert_called_once()
         assert len(docs) == 1
+
+    @patch("langchain_youdotcom._utilities.You")
+    def test_raw_research_calls_sdk(self, mock_you_cls: MagicMock) -> None:
+        """raw_research() creates a client and calls client.research."""
+        from youdotcom.models import ResearchEffort
+
+        response = make_research_response()
+        mock_client = MagicMock()
+        mock_client.research.return_value = response
+        mock_client.__enter__ = MagicMock(return_value=mock_client)
+        mock_client.__exit__ = MagicMock(return_value=False)
+        mock_you_cls.return_value = mock_client
+
+        wrapper = YouSearchAPIWrapper(ydc_api_key="test-key", research_effort="lite")
+        result = wrapper.raw_research("test query")
+
+        mock_client.research.assert_called_once()
+        call_kwargs = mock_client.research.call_args.kwargs
+        assert call_kwargs["input"] == "test query"
+        assert call_kwargs["research_effort"] == ResearchEffort.LITE
+        assert result.output.content == "Research answer with [1] citations."
+
+    @patch("langchain_youdotcom._utilities.You")
+    def test_research_text_calls_sdk(self, mock_you_cls: MagicMock) -> None:
+        """research_text() returns formatted markdown with sources."""
+        response = make_research_response()
+        mock_client = MagicMock()
+        mock_client.research.return_value = response
+        mock_client.__enter__ = MagicMock(return_value=mock_client)
+        mock_client.__exit__ = MagicMock(return_value=False)
+        mock_you_cls.return_value = mock_client
+
+        wrapper = YouSearchAPIWrapper(ydc_api_key="test-key")
+        result = wrapper.research_text("test query")
+
+        assert isinstance(result, str)
+        assert "Research answer" in result
+        assert "## Sources" in result
+
+    @patch("langchain_youdotcom._utilities.You")
+    async def test_research_text_async_calls_sdk(self, mock_you_cls: MagicMock) -> None:
+        """research_text_async() returns formatted markdown with sources."""
+        response = make_research_response()
+        mock_client = MagicMock()
+        mock_client.research_async = AsyncMock(return_value=response)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_you_cls.return_value = mock_client
+
+        wrapper = YouSearchAPIWrapper(ydc_api_key="test-key")
+        result = await wrapper.research_text_async("test query")
+
+        mock_client.research_async.assert_called_once()
+        assert isinstance(result, str)
+        assert "Research answer" in result
+        assert "## Sources" in result
+
+
+class TestResearchFormatting:
+    """Formatting of research responses."""
+
+    def test_format_with_sources(self) -> None:
+        """Response includes markdown answer and numbered sources."""
+        sources = [
+            make_research_source(url="https://a.com", title="Source A"),
+            make_research_source(url="https://b.com", title="Source B"),
+        ]
+        response = make_research_response(content="The answer is 42.", sources=sources)
+        wrapper = YouSearchAPIWrapper(ydc_api_key="k")
+        result = wrapper._format_research_response(response)
+
+        assert result.startswith("The answer is 42.")
+        assert "## Sources" in result
+        assert "1. [Source A](https://a.com)" in result
+        assert "2. [Source B](https://b.com)" in result
+
+    def test_format_without_sources(self) -> None:
+        """Response without sources omits the sources section."""
+        response = make_research_response(content="Just an answer.", sources=[])
+        wrapper = YouSearchAPIWrapper(ydc_api_key="k")
+        result = wrapper._format_research_response(response)
+
+        assert result == "Just an answer."
+        assert "## Sources" not in result
+
+    def test_format_source_falls_back_to_url(self) -> None:
+        """Source with no title uses URL as link text."""
+        source = make_research_source(url="https://c.com", title=None)
+        response = make_research_response(sources=[source])
+        wrapper = YouSearchAPIWrapper(ydc_api_key="k")
+        result = wrapper._format_research_response(response)
+
+        assert "[https://c.com](https://c.com)" in result
+
+    def test_research_params_without_effort(self) -> None:
+        """Params omit research_effort when not set."""
+        wrapper = YouSearchAPIWrapper(ydc_api_key="k")
+        params = wrapper._research_params("my query")
+
+        assert params == {"input": "my query"}
+
+    def test_research_params_with_effort(self) -> None:
+        """Params include ResearchEffort enum when set."""
+        from youdotcom.models import ResearchEffort
+
+        wrapper = YouSearchAPIWrapper(ydc_api_key="k", research_effort="deep")
+        params = wrapper._research_params("my query")
+
+        assert params["input"] == "my query"
+        assert params["research_effort"] == ResearchEffort.DEEP

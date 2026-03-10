@@ -1,4 +1,4 @@
-"""You.com Search API wrapper."""
+"""You.com Search, Contents, and Research API wrapper."""
 
 from __future__ import annotations
 
@@ -9,17 +9,18 @@ import httpx
 from langchain_core.documents import Document
 from pydantic import BaseModel, Field, SecretStr, model_validator
 from youdotcom import You
-from youdotcom.models import ContentsFormats
+from youdotcom.models import ContentsFormats, ResearchEffort
 
 if TYPE_CHECKING:
-    from youdotcom.models import ContentsResponse, SearchResponse
+    from youdotcom.models import ContentsResponse, ResearchResponse, SearchResponse
 
 
 class YouSearchAPIWrapper(BaseModel):
-    """Wrapper around the You.com Search and Contents APIs.
+    """Wrapper around the You.com Search, Contents, and Research APIs.
 
-    Uses the ``youdotcom`` SDK to call the You.com Search API and Contents
-    API, returning results as LangChain :class:`Document` objects.
+    Uses the ``youdotcom`` SDK to call the You.com Search, Contents, and
+    Research APIs, returning results as LangChain :class:`Document` objects
+    or formatted text.
 
     Requires a ``YDC_API_KEY`` environment variable or explicit
     ``ydc_api_key`` parameter.
@@ -57,6 +58,10 @@ class YouSearchAPIWrapper(BaseModel):
     k: int | None = Field(default=None, description="Max documents to return.")
     n_snippets_per_hit: int | None = Field(
         default=None, description="Max snippets per search hit."
+    )
+    research_effort: str | None = Field(
+        default=None,
+        description="Research effort level: lite, standard, deep, or exhaustive.",
     )
 
     @model_validator(mode="before")
@@ -198,6 +203,63 @@ class YouSearchAPIWrapper(BaseModel):
         return self._parse_contents_response(pages)
 
     # ------------------------------------------------------------------
+    # Research
+    # ------------------------------------------------------------------
+
+    def _research_params(self, query: str) -> dict[str, Any]:
+        """Build kwargs for ``client.research()``, converting effort string to enum."""
+        params: dict[str, Any] = {"input": query}
+        if self.research_effort is not None:
+            params["research_effort"] = ResearchEffort(self.research_effort)
+        return params
+
+    def raw_research(self, query: str) -> ResearchResponse:
+        """Call the You.com Research API and return the raw SDK response.
+
+        Args:
+            query: The research query.
+
+        Returns:
+            The raw ``ResearchResponse`` from the ``youdotcom`` SDK.
+        """
+        with self._make_client() as client:
+            return client.research(**self._research_params(query))
+
+    async def raw_research_async(self, query: str) -> ResearchResponse:
+        """Async variant of :meth:`raw_research`.
+
+        Args:
+            query: The research query.
+
+        Returns:
+            The raw ``ResearchResponse`` from the ``youdotcom`` SDK.
+        """
+        async with self._make_client() as client:
+            return await client.research_async(**self._research_params(query))
+
+    def research_text(self, query: str) -> str:
+        """Research a query and return formatted markdown with sources.
+
+        Args:
+            query: The research query.
+
+        Returns:
+            Markdown answer followed by a sources section.
+        """
+        return self._format_research_response(self.raw_research(query))
+
+    async def research_text_async(self, query: str) -> str:
+        """Async variant of :meth:`research_text`.
+
+        Args:
+            query: The research query.
+
+        Returns:
+            Markdown answer followed by a sources section.
+        """
+        return self._format_research_response(await self.raw_research_async(query))
+
+    # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
 
@@ -316,3 +378,15 @@ class YouSearchAPIWrapper(BaseModel):
 
             docs.append(Document(page_content=content, metadata=metadata))
         return docs
+
+    @staticmethod
+    def _format_research_response(response: ResearchResponse) -> str:
+        """Format a research response as markdown with a numbered sources section."""
+        parts: list[str] = [response.output.content]
+        if response.output.sources:
+            lines = ["", "## Sources", ""]
+            for i, src in enumerate(response.output.sources, 1):
+                title = src.title or src.url
+                lines.append(f"{i}. [{title}]({src.url})")
+            parts.append("\n".join(lines))
+        return "\n".join(parts)

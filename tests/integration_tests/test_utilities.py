@@ -67,3 +67,25 @@ def test_contents_multiple_urls() -> None:
     docs = wrapper.contents(urls)
 
     assert len(docs) > 0
+
+
+def test_raw_research() -> None:
+    """raw_research() returns the SDK response object."""
+    wrapper = YouSearchAPIWrapper(research_effort="lite")
+    response = wrapper.raw_research("what is langchain")
+
+    print(response)  # noqa: T201
+    assert response.output is not None
+    assert response.output.content
+    assert isinstance(response.output.sources, list)
+
+
+def test_research_text() -> None:
+    """research_text() returns formatted markdown with sources."""
+    wrapper = YouSearchAPIWrapper(research_effort="lite")
+    result = wrapper.research_text("what is retrieval augmented generation")
+
+    print(result)  # noqa: T201
+    assert isinstance(result, str)
+    assert len(result) > 0
+    assert "## Sources" in result

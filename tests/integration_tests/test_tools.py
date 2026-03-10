@@ -1,8 +1,13 @@
-"""Integration tests for YouSearchTool and YouContentsTool."""
+"""Integration tests for YouSearchTool, YouResearchTool, and YouContentsTool."""
 
 from __future__ import annotations
 
-from langchain_youdotcom import YouContentsTool, YouSearchTool
+from langchain_youdotcom import (
+    YouContentsTool,
+    YouResearchTool,
+    YouSearchAPIWrapper,
+    YouSearchTool,
+)
 
 
 def test_search_tool_basic() -> None:
@@ -21,6 +26,19 @@ def test_search_tool_contains_content() -> None:
     result = tool.invoke("python langchain")
 
     assert "http" in result  # URLs appear in formatted output
+
+
+def test_research_tool_basic() -> None:
+    """YouResearchTool returns a non-empty string with sources."""
+    tool = YouResearchTool(
+        api_wrapper=YouSearchAPIWrapper(research_effort="lite"),
+    )
+    result = tool.invoke("what is retrieval augmented generation")
+
+    print(result)  # noqa: T201
+    assert isinstance(result, str)
+    assert len(result) > 0
+    assert "## Sources" in result
 
 
 def test_contents_tool_basic() -> None:

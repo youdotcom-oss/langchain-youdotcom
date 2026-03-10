@@ -1,6 +1,6 @@
 # langchain-youdotcom
 
-LangChain partner package for You.com search and content APIs.
+LangChain partner package for You.com search, content, and research APIs.
 
 ## Build & test
 
@@ -17,7 +17,7 @@ make check_imports       # verify all .py files importable
 
 - `langchain_youdotcom/_utilities.py` — `YouSearchAPIWrapper` (API client)
 - `langchain_youdotcom/retrievers.py` — `YouRetriever` (BaseRetriever subclass)
-- `langchain_youdotcom/tools.py` — `YouSearchTool` + `YouContentsTool` (BaseTool subclasses)
+- `langchain_youdotcom/tools.py` — `YouSearchTool` + `YouResearchTool` + `YouContentsTool` (BaseTool subclasses)
 
 ## Conventions
 

@@ -17,6 +17,12 @@ class YouSearchInput(BaseModel):
     query: str = Field(description="Search query to look up on You.com.")
 
 
+class YouResearchInput(BaseModel):
+    """Input schema for :class:`YouResearchTool`."""
+
+    query: str = Field(description="Research query to investigate with You.com.")
+
+
 class YouContentsInput(BaseModel):
     """Input schema for :class:`YouContentsTool`."""
 
@@ -77,6 +83,57 @@ class YouSearchTool(BaseTool):
             Search results formatted as a string.
         """
         return _format_docs(await self.api_wrapper.results_async(query))
+
+
+class YouResearchTool(BaseTool):
+    """Tool that queries the You.com Research API.
+
+    Returns comprehensive, research-grade answers with multi-step reasoning
+    and cited sources.
+
+    Requires a ``YDC_API_KEY`` environment variable or an explicit key on
+    the ``api_wrapper``.
+
+    Example:
+        .. code-block:: python
+
+            from langchain_youdotcom import YouResearchTool
+
+            tool = YouResearchTool()
+            result = tool.invoke("what are the latest advances in quantum computing")
+    """
+
+    name: str = "you_research"
+    description: str = (
+        "Research a topic in depth using You.com and return a comprehensive "
+        "answer with cited sources."
+    )
+    api_wrapper: YouSearchAPIWrapper = Field(default_factory=YouSearchAPIWrapper)
+    args_schema: type[BaseModel] = YouResearchInput
+
+    def _run(self, query: str, **kwargs: Any) -> str:
+        """Run the You.com research tool.
+
+        Args:
+            query: The research query.
+            **kwargs: Additional keyword arguments.
+
+        Returns:
+            Research answer formatted as markdown with sources.
+        """
+        return self.api_wrapper.research_text(query)
+
+    async def _arun(self, query: str, **kwargs: Any) -> str:
+        """Async run the You.com research tool.
+
+        Args:
+            query: The research query.
+            **kwargs: Additional keyword arguments.
+
+        Returns:
+            Research answer formatted as markdown with sources.
+        """
+        return await self.api_wrapper.research_text_async(query)
 
 
 class YouContentsTool(BaseTool):
