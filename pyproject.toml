@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "langchain-youdotcom"
-version = "0.1.0"
+version = "0.2.0"
 description = "An integration package connecting You.com and LangChain"
 readme = "README.md"
 license = { text = "MIT" }
