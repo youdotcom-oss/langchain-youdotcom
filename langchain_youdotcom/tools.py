@@ -8,7 +8,7 @@ from langchain_core.documents import Document
 from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
 
-from langchain_youdotcom._utilities import YouSearchAPIWrapper
+from langchain_youdotcom._utilities import YouAPIWrapper
 
 
 class YouSearchInput(BaseModel):
@@ -65,7 +65,7 @@ class YouSearchTool(BaseTool):
 
     name: str = "you_search"
     description: str = "Search the web using You.com and return relevant results."
-    api_wrapper: YouSearchAPIWrapper = Field(default_factory=YouSearchAPIWrapper)
+    api_wrapper: YouAPIWrapper = Field(default_factory=YouAPIWrapper)
     args_schema: type[BaseModel] = YouSearchInput
 
     def _run(self, query: str, **kwargs: Any) -> str:
@@ -116,7 +116,7 @@ class YouResearchTool(BaseTool):
         "Research a topic in depth using You.com and return a comprehensive "
         "answer with cited sources."
     )
-    api_wrapper: YouSearchAPIWrapper = Field(default_factory=YouSearchAPIWrapper)
+    api_wrapper: YouAPIWrapper = Field(default_factory=YouAPIWrapper)
     args_schema: type[BaseModel] = YouResearchInput
 
     def _run(self, query: str, **kwargs: Any) -> str:
@@ -161,7 +161,7 @@ class YouContentsTool(BaseTool):
 
     name: str = "you_contents"
     description: str = "Fetch and extract content from web pages using You.com."
-    api_wrapper: YouSearchAPIWrapper = Field(default_factory=YouSearchAPIWrapper)
+    api_wrapper: YouAPIWrapper = Field(default_factory=YouAPIWrapper)
     args_schema: type[BaseModel] = YouContentsInput
 
     def _run(self, urls: list[str], **kwargs: Any) -> str:
@@ -215,7 +215,7 @@ class YouFinanceResearchTool(BaseTool):
         "finance-optimized index (SEC filings, earnings, equity prices, "
         "macro indicators)."
     )
-    api_wrapper: YouSearchAPIWrapper = Field(default_factory=YouSearchAPIWrapper)
+    api_wrapper: YouAPIWrapper = Field(default_factory=YouAPIWrapper)
     args_schema: type[BaseModel] = YouFinanceResearchInput
 
     def _run(self, query: str, **kwargs: Any) -> str:

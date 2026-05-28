@@ -1,15 +1,15 @@
-"""Integration tests for YouSearchAPIWrapper."""
+"""Integration tests for YouAPIWrapper."""
 
 from __future__ import annotations
 
 from langchain_core.documents import Document
 
-from langchain_youdotcom import YouSearchAPIWrapper
+from langchain_youdotcom import YouAPIWrapper
 
 
 def test_results_basic() -> None:
     """results() returns documents for a simple query."""
-    wrapper = YouSearchAPIWrapper()
+    wrapper = YouAPIWrapper()
     docs = wrapper.results("what is langchain")
 
     print(docs)  # noqa: T201
@@ -21,7 +21,7 @@ def test_results_basic() -> None:
 
 def test_raw_results() -> None:
     """raw_results() returns the SDK response object."""
-    wrapper = YouSearchAPIWrapper()
+    wrapper = YouAPIWrapper()
     response = wrapper.raw_results("python tutorials")
 
     print(response)  # noqa: T201
@@ -32,7 +32,7 @@ def test_raw_results() -> None:
 
 def test_results_k_limit() -> None:
     """K limits the total documents returned."""
-    wrapper = YouSearchAPIWrapper(k=2)
+    wrapper = YouAPIWrapper(k=2)
     docs = wrapper.results("machine learning")
 
     assert len(docs) <= 2
@@ -40,7 +40,7 @@ def test_results_k_limit() -> None:
 
 def test_results_with_livecrawl() -> None:
     """Livecrawl fetches full page content."""
-    wrapper = YouSearchAPIWrapper(k=1, livecrawl="web")
+    wrapper = YouAPIWrapper(k=1, livecrawl="web")
     docs = wrapper.results("langchain documentation")
 
     assert len(docs) > 0
@@ -49,7 +49,7 @@ def test_results_with_livecrawl() -> None:
 
 def test_contents_basic() -> None:
     """contents() fetches and parses page content."""
-    wrapper = YouSearchAPIWrapper()
+    wrapper = YouAPIWrapper()
     docs = wrapper.contents(["https://example.com"])
 
     print(docs)  # noqa: T201
@@ -62,7 +62,7 @@ def test_contents_basic() -> None:
 
 def test_contents_multiple_urls() -> None:
     """contents() handles multiple URLs."""
-    wrapper = YouSearchAPIWrapper()
+    wrapper = YouAPIWrapper()
     urls = ["https://example.com", "https://httpbin.org/html"]
     docs = wrapper.contents(urls)
 
@@ -71,7 +71,7 @@ def test_contents_multiple_urls() -> None:
 
 def test_raw_research() -> None:
     """raw_research() returns the SDK response object."""
-    wrapper = YouSearchAPIWrapper(research_effort="lite")
+    wrapper = YouAPIWrapper(research_effort="lite")
     response = wrapper.raw_research("what is langchain")
 
     print(response)  # noqa: T201
@@ -82,7 +82,7 @@ def test_raw_research() -> None:
 
 def test_research_text() -> None:
     """research_text() returns formatted markdown with sources."""
-    wrapper = YouSearchAPIWrapper(research_effort="lite")
+    wrapper = YouAPIWrapper(research_effort="lite")
     result = wrapper.research_text("what is retrieval augmented generation")
 
     print(result)  # noqa: T201
@@ -93,7 +93,7 @@ def test_research_text() -> None:
 
 def test_finance_text() -> None:
     """finance_text() returns formatted markdown with sources."""
-    wrapper = YouSearchAPIWrapper(research_effort="deep")
+    wrapper = YouAPIWrapper(research_effort="deep")
     result = wrapper.finance_text("what were NVIDIA's key revenue drivers in FY2025")
 
     print(result)  # noqa: T201

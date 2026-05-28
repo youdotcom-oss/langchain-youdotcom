@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from youdotcom.models import ContentsResponse, ResearchResponse, SearchResponse
 
 
-class YouSearchAPIWrapper(BaseModel):
+class YouAPIWrapper(BaseModel):
     """Wrapper around the You.com Search, Contents, Research, and Finance Research APIs.
 
     Uses the ``youdotcom`` SDK to call the You.com Search, Contents, and
@@ -33,9 +33,9 @@ class YouSearchAPIWrapper(BaseModel):
     Example:
         .. code-block:: python
 
-            from langchain_youdotcom import YouSearchAPIWrapper
+            from langchain_youdotcom import YouAPIWrapper
 
-            wrapper = YouSearchAPIWrapper(ydc_api_key="...")
+            wrapper = YouAPIWrapper(ydc_api_key="...")
             docs = wrapper.results("latest AI news")
     """
 
@@ -523,3 +523,7 @@ class YouSearchAPIWrapper(BaseModel):
                 lines.append(f"{i}. [{title}]({src.url})")
             parts.append("\n".join(lines))
         return "\n".join(parts)
+
+
+# Backward-compatible alias; remove in the next major version.
+YouSearchAPIWrapper = YouAPIWrapper

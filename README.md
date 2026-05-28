@@ -6,7 +6,7 @@
 
 LangChain partner package for [You.com](https://you.com) search, content extraction, research, and finance research APIs.
 
-[Installation](#installation) | [Credentials](#credentials) | [Tools](#tools) | [Retriever](#retriever) | [API Wrapper](#yousearchapiwrapper) | [Resources](#resources)
+[Installation](#installation) | [Credentials](#credentials) | [Tools](#tools) | [Retriever](#retriever) | [API Wrapper](#youapiwrapper) | [Resources](#resources)
 
 ## Installation
 
@@ -25,9 +25,9 @@ export YDC_API_KEY="your-api-key"
 Or pass it directly when instantiating any component:
 
 ```python
-from langchain_youdotcom import YouSearchTool, YouSearchAPIWrapper
+from langchain_youdotcom import YouSearchTool, YouAPIWrapper
 
-tool = YouSearchTool(api_wrapper=YouSearchAPIWrapper(ydc_api_key="your-api-key"))
+tool = YouSearchTool(api_wrapper=YouAPIWrapper(ydc_api_key="your-api-key"))
 ```
 
 ## Tools
@@ -36,7 +36,7 @@ tool = YouSearchTool(api_wrapper=YouSearchAPIWrapper(ydc_api_key="your-api-key")
 
 Search the web with up to date results. Supports geographic filtering, freshness controls, and optional live-crawling for full page content. Great for monitoring mentions, pulling recent news, or feeding live data into agent workflows.
 
-**Instantiation parameters** (set on `YouSearchAPIWrapper`):
+**Instantiation parameters** (set on `YouAPIWrapper`):
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
@@ -55,10 +55,10 @@ Search the web with up to date results. Supports geographic filtering, freshness
 - `query` (required, `str`): The search query.
 
 ```python
-from langchain_youdotcom import YouSearchTool, YouSearchAPIWrapper
+from langchain_youdotcom import YouSearchTool, YouAPIWrapper
 
 tool = YouSearchTool(
-    api_wrapper=YouSearchAPIWrapper(
+    api_wrapper=YouAPIWrapper(
         count=5,
         country="US",
         freshness="week",
@@ -92,7 +92,7 @@ response = agent.invoke(
 
 Extract clean, structured content from one or more web pages. Returns page text as markdown or HTML, plus metadata like JSON-LD, OpenGraph, and Twitter Cards. Useful for scraping product pages, pulling article text, or extracting structured data from any URL.
 
-**Instantiation parameters** (set on `YouSearchAPIWrapper`):
+**Instantiation parameters** (set on `YouAPIWrapper`):
 
 No tool-level configuration. All parameters are passed at invocation time.
 
@@ -100,7 +100,7 @@ No tool-level configuration. All parameters are passed at invocation time.
 
 - `urls` (required, `list[str]`): URLs to fetch content from.
 
-Content format and timeout are configured when calling the wrapper directly (see [YouSearchAPIWrapper](#yousearchapiwrapper)).
+Content format and timeout are configured when calling the wrapper directly (see [YouAPIWrapper](#youapiwrapper)).
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
@@ -120,7 +120,7 @@ print(result)
 
 Get a comprehensive, cited answer to a complex question. The Research API searches the web, reads multiple sources, and synthesizes a detailed markdown response with inline numbered citations. Perfect for competitive analysis, market research, technical due diligence, or any question that needs more than a simple search result.
 
-**Instantiation parameters** (set on `YouSearchAPIWrapper`):
+**Instantiation parameters** (set on `YouAPIWrapper`):
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
@@ -140,7 +140,7 @@ Get a comprehensive, cited answer to a complex question. The Research API search
 - `query` (required, `str`): The research question.
 
 ```python
-from langchain_youdotcom import YouResearchTool, YouSearchAPIWrapper
+from langchain_youdotcom import YouResearchTool, YouAPIWrapper
 
 # default effort
 tool = YouResearchTool()
@@ -149,7 +149,7 @@ print(result)
 
 # deep research
 tool = YouResearchTool(
-    api_wrapper=YouSearchAPIWrapper(research_effort="deep"),
+    api_wrapper=YouAPIWrapper(research_effort="deep"),
 )
 result = tool.invoke("compare transformer architectures for long-context tasks")
 print(result)
@@ -159,7 +159,7 @@ print(result)
 
 Get a comprehensive, citation-backed answer to a financial question. The Finance Research API works like the Research API but searches a finance-optimized index covering SEC filings, earnings reports, equity prices, macro indicators, and financial news. Ideal for earnings analysis, competitive benchmarking, due diligence, and market research.
 
-**Instantiation parameters** (set on `YouSearchAPIWrapper`):
+**Instantiation parameters** (set on `YouAPIWrapper`):
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
@@ -177,7 +177,7 @@ Finance research only accepts `deep` and `exhaustive`. Other values raise `Value
 - `query` (required, `str`): The financial research question.
 
 ```python
-from langchain_youdotcom import YouFinanceResearchTool, YouSearchAPIWrapper
+from langchain_youdotcom import YouFinanceResearchTool, YouAPIWrapper
 
 tool = YouFinanceResearchTool()
 result = tool.invoke("what were NVIDIA's key revenue drivers in FY2025")
@@ -185,7 +185,7 @@ print(result)
 
 # exhaustive research for complex due diligence
 tool = YouFinanceResearchTool(
-    api_wrapper=YouSearchAPIWrapper(research_effort="exhaustive"),
+    api_wrapper=YouAPIWrapper(research_effort="exhaustive"),
 )
 result = tool.invoke("compare gross margins of Apple, Microsoft, and Google over the past three fiscal years")
 print(result)
@@ -221,16 +221,16 @@ retriever = YouRetriever(
 )
 ```
 
-## YouSearchAPIWrapper
+## YouAPIWrapper
 
 Lower-level wrapper that powers the tools and retriever under the hood. Use it directly when you need full control over API calls and response formats.
 
 **Search:**
 
 ```python
-from langchain_youdotcom import YouSearchAPIWrapper
+from langchain_youdotcom import YouAPIWrapper
 
-wrapper = YouSearchAPIWrapper()
+wrapper = YouAPIWrapper()
 
 # search -> list[Document]
 docs = wrapper.results("latest AI news")

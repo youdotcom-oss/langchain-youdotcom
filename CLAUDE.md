@@ -15,7 +15,7 @@ make check_imports       # verify all .py files importable
 
 ## Architecture
 
-- `langchain_youdotcom/_utilities.py` — `YouSearchAPIWrapper` (API client)
+- `langchain_youdotcom/_utilities.py` — `YouAPIWrapper` (API client)
 - `langchain_youdotcom/retrievers.py` — `YouRetriever` (BaseRetriever subclass)
 - `langchain_youdotcom/tools.py` — `YouSearchTool` + `YouResearchTool` + `YouContentsTool` + `YouFinanceResearchTool` (BaseTool subclasses)
 
