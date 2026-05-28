@@ -4,7 +4,7 @@
 [![PyPI - License](https://img.shields.io/pypi/l/langchain-youdotcom)](https://opensource.org/licenses/MIT)
 [![PyPI - Downloads](https://img.shields.io/pepy/dt/langchain-youdotcom)](https://pypistats.org/packages/langchain-youdotcom)
 
-LangChain partner package for [You.com](https://you.com) search, content extraction, and research APIs.
+LangChain partner package for [You.com](https://you.com) search, content extraction, research, and finance research APIs.
 
 [Installation](#installation) | [Credentials](#credentials) | [Tools](#tools) | [Retriever](#retriever) | [API Wrapper](#yousearchapiwrapper) | [Resources](#resources)
 
@@ -155,6 +155,42 @@ result = tool.invoke("compare transformer architectures for long-context tasks")
 print(result)
 ```
 
+### YouFinanceResearchTool
+
+Get a comprehensive, citation-backed answer to a financial question. The Finance Research API works like the Research API but searches a finance-optimized index covering SEC filings, earnings reports, equity prices, macro indicators, and financial news. Ideal for earnings analysis, competitive benchmarking, due diligence, and market research.
+
+**Instantiation parameters** (set on `YouSearchAPIWrapper`):
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `research_effort` | `str \| None` | `None` | Controls depth (shared with YouResearchTool; see levels below) |
+
+Finance research only accepts `deep` and `exhaustive`. Other values raise `ValueError`.
+
+| Level | Description |
+|-------|-------------|
+| `deep` | Multi-source analysis, earnings summaries, competitive benchmarking (default) |
+| `exhaustive` | Comprehensive research, deep due diligence, full 10-K analysis |
+
+**Invocation args:**
+
+- `query` (required, `str`): The financial research question.
+
+```python
+from langchain_youdotcom import YouFinanceResearchTool, YouSearchAPIWrapper
+
+tool = YouFinanceResearchTool()
+result = tool.invoke("what were NVIDIA's key revenue drivers in FY2025")
+print(result)
+
+# exhaustive research for complex due diligence
+tool = YouFinanceResearchTool(
+    api_wrapper=YouSearchAPIWrapper(research_effort="exhaustive"),
+)
+result = tool.invoke("compare gross margins of Apple, Microsoft, and Google over the past three fiscal years")
+print(result)
+```
+
 ## Retriever
 
 The simplest way to get You.com search results as LangChain documents. Accepts all search parameters from [YouSearchTool](#yousearchtool).
@@ -223,7 +259,17 @@ text = wrapper.research_text("explain quantum entanglement")
 raw = wrapper.raw_research("explain quantum entanglement")
 ```
 
-Async variants are available for all methods: `results_async`, `raw_results_async`, `contents_async`, `research_text_async`, `raw_research_async`.
+**Finance Research:**
+
+```python
+# finance research -> formatted markdown with sources
+text = wrapper.finance_text("what drove NVIDIA's revenue growth in FY2025")
+
+# raw response (parsed from JSON)
+raw = wrapper.raw_finance("compare AAPL and MSFT gross margins")
+```
+
+Async variants are available for all methods: `results_async`, `raw_results_async`, `contents_async`, `research_text_async`, `raw_research_async`, `finance_text_async`, `raw_finance_async`.
 
 ## Resources
 
@@ -231,6 +277,7 @@ Async variants are available for all methods: `results_async`, `raw_results_asyn
 - [Search API reference](https://docs.you.com/api-reference/search)
 - [Contents API reference](https://docs.you.com/api-reference/contents)
 - [Research API reference](https://docs.you.com/api-reference/research)
+- [Finance Research API reference](https://docs.you.com/api-reference/finance-research)
 - [You.com API keys](https://you.com/platform/api-keys)
 
 ## Development

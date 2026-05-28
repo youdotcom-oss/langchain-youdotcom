@@ -123,3 +123,20 @@ def make_contents_page(
     meta.favicon_url = favicon_url
     page.metadata = meta if (site_name or favicon_url) else None
     return page
+
+
+def make_finance_research_json(
+    *,
+    content: str = "Finance answer with [1] citations.",
+    sources: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Build a JSON dict matching the Finance Research API response shape."""
+    if sources is None:
+        sources = [{"url": "https://finance.example.com", "title": "Finance Source"}]
+    return {
+        "output": {
+            "content": content,
+            "content_type": "text",
+            "sources": sources,
+        }
+    }

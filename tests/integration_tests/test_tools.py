@@ -1,9 +1,10 @@
-"""Integration tests for YouSearchTool, YouResearchTool, and YouContentsTool."""
+"""Integration tests for You.com tools."""
 
 from __future__ import annotations
 
 from langchain_youdotcom import (
     YouContentsTool,
+    YouFinanceResearchTool,
     YouResearchTool,
     YouSearchAPIWrapper,
     YouSearchTool,
@@ -49,3 +50,16 @@ def test_contents_tool_basic() -> None:
     print(result)  # noqa: T201
     assert isinstance(result, str)
     assert len(result) > 0
+
+
+def test_finance_research_tool_basic() -> None:
+    """YouFinanceResearchTool returns a non-empty string with sources."""
+    tool = YouFinanceResearchTool(
+        api_wrapper=YouSearchAPIWrapper(research_effort="deep"),
+    )
+    result = tool.invoke("what were NVIDIA's key revenue drivers in FY2025")
+
+    print(result)  # noqa: T201
+    assert isinstance(result, str)
+    assert len(result) > 0
+    assert "## Sources" in result

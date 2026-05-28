@@ -1,9 +1,11 @@
-"""You.com Search, Contents, and Research API wrapper."""
+"""You.com Search, Contents, Research, and Finance Research API wrapper."""
 
 from __future__ import annotations
 
 import os
-from typing import TYPE_CHECKING, Any
+from importlib.metadata import version as pkg_version
+from types import SimpleNamespace
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import httpx
 from langchain_core.documents import Document
@@ -11,16 +13,19 @@ from pydantic import BaseModel, Field, SecretStr, model_validator
 from youdotcom import You
 from youdotcom.models import ContentsFormats, ResearchEffort
 
+_USER_AGENT = f"langchain-youdotcom/{pkg_version('langchain-youdotcom')}"
+
 if TYPE_CHECKING:
     from youdotcom.models import ContentsResponse, ResearchResponse, SearchResponse
 
 
 class YouSearchAPIWrapper(BaseModel):
-    """Wrapper around the You.com Search, Contents, and Research APIs.
+    """Wrapper around the You.com Search, Contents, Research, and Finance Research APIs.
 
     Uses the ``youdotcom`` SDK to call the You.com Search, Contents, and
-    Research APIs, returning results as LangChain :class:`Document` objects
-    or formatted text.
+    Research APIs, and makes direct HTTP calls for the Finance Research API
+    (not yet in the SDK). Returns results as LangChain :class:`Document`
+    objects or formatted text.
 
     Requires a ``YDC_API_KEY`` environment variable or explicit
     ``ydc_api_key`` parameter.
@@ -61,7 +66,11 @@ class YouSearchAPIWrapper(BaseModel):
     )
     research_effort: str | None = Field(
         default=None,
-        description="Research effort level: lite, standard, deep, or exhaustive.",
+        description=(
+            "Research effort level. For the Research API: lite, standard, "
+            "deep, or exhaustive. For the Finance Research API: deep or "
+            "exhaustive only."
+        ),
     )
 
     @model_validator(mode="before")
@@ -74,11 +83,10 @@ class YouSearchAPIWrapper(BaseModel):
         return values
 
     def _make_client(self) -> You:
-        ua = {"user-agent": "langchain-youdotcom/0.1.0"}
         return You(
             api_key_auth=self.ydc_api_key.get_secret_value(),
-            client=httpx.Client(headers=ua),
-            async_client=httpx.AsyncClient(headers=ua),
+            client=httpx.Client(headers=self._httpx_headers),
+            async_client=httpx.AsyncClient(headers=self._httpx_headers),
         )
 
     def _search_params(self, query: str) -> dict[str, Any]:
@@ -260,6 +268,131 @@ class YouSearchAPIWrapper(BaseModel):
         return self._format_research_response(await self.raw_research_async(query))
 
     # ------------------------------------------------------------------
+    # Finance Research
+    # ------------------------------------------------------------------
+
+    _FINANCE_API_URL: ClassVar[str] = "https://api.you.com/v1/finance_research"
+    _FINANCE_EFFORT_VALUES: ClassVar[tuple[str, ...]] = ("deep", "exhaustive")
+
+    @property
+    def _httpx_headers(self) -> dict[str, str]:
+        """Shared headers for SDK and direct httpx calls."""
+        return {
+            "X-API-Key": self.ydc_api_key.get_secret_value(),
+            "user-agent": _USER_AGENT,
+        }
+
+    def _make_httpx_client(self, timeout: float = 300.0) -> httpx.Client:
+        """Build an httpx client with auth, user-agent, and timeout.
+
+        Args:
+            timeout: Request timeout in seconds. Defaults to 300s
+                (Finance Research ``exhaustive`` can take up to 300s).
+        """
+        return httpx.Client(headers=self._httpx_headers, timeout=timeout)
+
+    def _make_async_httpx_client(self, timeout: float = 300.0) -> httpx.AsyncClient:
+        """Build an async httpx client with auth, user-agent, and timeout.
+
+        Args:
+            timeout: Request timeout in seconds. Defaults to 300s
+                (Finance Research ``exhaustive`` can take up to 300s).
+        """
+        return httpx.AsyncClient(headers=self._httpx_headers, timeout=timeout)
+
+    def _finance_research_params(self, query: str) -> dict[str, Any]:
+        """Build the JSON body for the Finance Research API.
+
+        Reuses ``research_effort`` from the wrapper. The Finance Research API
+        only accepts ``deep`` and ``exhaustive``; other values raise
+        ``ValueError`` so the user knows to pick a compatible level.
+        """
+        effort = self.research_effort or "deep"
+        if effort not in self._FINANCE_EFFORT_VALUES:
+            msg = (
+                f"Finance Research only supports 'deep' and 'exhaustive', "
+                f"got '{effort}'. Set research_effort to a compatible level."
+            )
+            raise ValueError(msg)
+        return {"input": query, "research_effort": effort}
+
+    @staticmethod
+    def _parse_finance_research_json(data: dict[str, Any]) -> SimpleNamespace:
+        """Parse Finance Research JSON for _format_research_response.
+
+        The Finance Research API returns the same response shape as the
+        Research API, so the parsed object works with
+        :meth:`_format_research_response`.
+        """
+        output_data = data.get("output") or {}
+        source_objs = [
+            SimpleNamespace(
+                url=s.get("url", ""),
+                title=s.get("title"),
+                snippets=s.get("snippets"),
+            )
+            for s in output_data.get("sources", [])
+        ]
+        output = SimpleNamespace(
+            content=output_data.get("content", ""),
+            content_type=output_data.get("content_type", "text"),
+            sources=source_objs,
+        )
+        return SimpleNamespace(output=output)
+
+    def raw_finance(self, query: str) -> Any:
+        """Call the You.com Finance Research API and return the parsed response.
+
+        Args:
+            query: The financial research query.
+
+        Returns:
+            A response object compatible with :meth:`_format_research_response`.
+        """
+        body = self._finance_research_params(query)
+        with self._make_httpx_client() as client:
+            resp = client.post(self._FINANCE_API_URL, json=body)
+        resp.raise_for_status()
+        return self._parse_finance_research_json(resp.json())
+
+    async def raw_finance_async(self, query: str) -> Any:
+        """Async variant of :meth:`raw_finance`.
+
+        Args:
+            query: The financial research query.
+
+        Returns:
+            A response object compatible with :meth:`_format_research_response`.
+        """
+        body = self._finance_research_params(query)
+        async with self._make_async_httpx_client() as client:
+            resp = await client.post(self._FINANCE_API_URL, json=body)
+        resp.raise_for_status()
+        return self._parse_finance_research_json(resp.json())
+
+    def finance_text(self, query: str) -> str:
+        """Research a financial query and return formatted markdown with sources.
+
+        Args:
+            query: The financial research query.
+
+        Returns:
+            Markdown answer followed by a sources section.
+        """
+        return self._format_research_response(self.raw_finance(query))
+
+    async def finance_text_async(self, query: str) -> str:
+        """Async variant of :meth:`finance_text`.
+
+        Args:
+            query: The financial research query.
+
+        Returns:
+            Markdown answer followed by a sources section.
+        """
+        return self._format_research_response(await self.raw_finance_async(query))
+
+    # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
 
@@ -380,8 +513,8 @@ class YouSearchAPIWrapper(BaseModel):
         return docs
 
     @staticmethod
-    def _format_research_response(response: ResearchResponse) -> str:
-        """Format a research response as markdown with a numbered sources section."""
+    def _format_research_response(response: Any) -> str:
+        """Format a research or finance research response as markdown with sources."""
         parts: list[str] = [response.output.content]
         if response.output.sources:
             lines = ["", "## Sources", ""]

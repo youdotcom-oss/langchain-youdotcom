@@ -89,3 +89,14 @@ def test_research_text() -> None:
     assert isinstance(result, str)
     assert len(result) > 0
     assert "## Sources" in result
+
+
+def test_finance_text() -> None:
+    """finance_text() returns formatted markdown with sources."""
+    wrapper = YouSearchAPIWrapper(research_effort="deep")
+    result = wrapper.finance_text("what were NVIDIA's key revenue drivers in FY2025")
+
+    print(result)  # noqa: T201
+    assert isinstance(result, str)
+    assert len(result) > 0
+    assert "## Sources" in result

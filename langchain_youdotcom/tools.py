@@ -29,6 +29,14 @@ class YouContentsInput(BaseModel):
     urls: list[str] = Field(description="URLs to fetch content from.")
 
 
+class YouFinanceResearchInput(BaseModel):
+    """Input schema for :class:`YouFinanceResearchTool`."""
+
+    query: str = Field(
+        description="Financial research query to investigate with You.com."
+    )
+
+
 def _format_docs(docs: list[Document]) -> str:
     """Join document contents with separators."""
     parts: list[str] = []
@@ -179,3 +187,57 @@ class YouContentsTool(BaseTool):
             Page contents formatted as a string.
         """
         return _format_docs(await self.api_wrapper.contents_async(urls))
+
+
+class YouFinanceResearchTool(BaseTool):
+    """Tool that queries the You.com Finance Research API.
+
+    Returns comprehensive, citation-backed answers to financial questions
+    from a finance-optimized index covering SEC filings, earnings, equity
+    prices, macro indicators, and financial news.
+
+    Requires a ``YDC_API_KEY`` environment variable or an explicit key on
+    the ``api_wrapper``.
+
+    Example:
+        .. code-block:: python
+
+            from langchain_youdotcom import YouFinanceResearchTool
+
+            tool = YouFinanceResearchTool()
+            result = tool.invoke("what drove NVIDIA's revenue growth in FY2025")
+    """
+
+    name: str = "you_finance_research"
+    description: str = (
+        "Research a financial question in depth using You.com Finance Research "
+        "and return a comprehensive answer with cited sources from a "
+        "finance-optimized index (SEC filings, earnings, equity prices, "
+        "macro indicators)."
+    )
+    api_wrapper: YouSearchAPIWrapper = Field(default_factory=YouSearchAPIWrapper)
+    args_schema: type[BaseModel] = YouFinanceResearchInput
+
+    def _run(self, query: str, **kwargs: Any) -> str:
+        """Run the You.com finance research tool.
+
+        Args:
+            query: The financial research query.
+            **kwargs: Additional keyword arguments.
+
+        Returns:
+            Finance research answer formatted as markdown with sources.
+        """
+        return self.api_wrapper.finance_text(query)
+
+    async def _arun(self, query: str, **kwargs: Any) -> str:
+        """Async run the You.com finance research tool.
+
+        Args:
+            query: The financial research query.
+            **kwargs: Additional keyword arguments.
+
+        Returns:
+            Finance research answer formatted as markdown with sources.
+        """
+        return await self.api_wrapper.finance_text_async(query)

@@ -10,6 +10,7 @@ import pytest
 from langchain_youdotcom import YouSearchAPIWrapper
 from tests.unit_tests.conftest import (
     make_contents_page,
+    make_finance_research_json,
     make_livecrawl_contents,
     make_news_hit,
     make_research_response,
@@ -335,3 +336,131 @@ class TestResearchFormatting:
 
         assert params["input"] == "my query"
         assert params["research_effort"] == ResearchEffort.DEEP
+
+
+class TestFinanceResearchParams:
+    """Finance Research parameter building."""
+
+    def test_default_effort_is_deep(self) -> None:
+        """Default finance research effort is deep."""
+        wrapper = YouSearchAPIWrapper(ydc_api_key="k")
+        params = wrapper._finance_research_params("NVDA earnings")
+        assert params == {"input": "NVDA earnings", "research_effort": "deep"}
+
+    def test_explicit_effort(self) -> None:
+        """Explicit research_effort is passed through."""
+        wrapper = YouSearchAPIWrapper(ydc_api_key="k", research_effort="exhaustive")
+        params = wrapper._finance_research_params("AAPL revenue")
+        assert params["research_effort"] == "exhaustive"
+
+    def test_incompatible_effort_raises(self) -> None:
+        """Incompatible effort level raises ValueError."""
+        wrapper = YouSearchAPIWrapper(ydc_api_key="k", research_effort="lite")
+        with pytest.raises(ValueError, match="Finance Research"):
+            wrapper._finance_research_params("query")
+
+
+class TestFinanceResearchParsing:
+    """Parsing of Finance Research JSON responses."""
+
+    def test_parse_finance_research_json(self) -> None:
+        """Parsed object works with _format_research_response."""
+        data = make_finance_research_json(
+            content="NVIDIA revenue grew due to data center.",
+            sources=[
+                {"url": "https://sec.gov/nvda", "title": "NVIDIA 10-K"},
+            ],
+        )
+        wrapper = YouSearchAPIWrapper(ydc_api_key="k")
+        response = wrapper._parse_finance_research_json(data)
+        result = wrapper._format_research_response(response)
+
+        assert "NVIDIA revenue grew" in result
+        assert "## Sources" in result
+        assert "[NVIDIA 10-K](https://sec.gov/nvda)" in result
+
+    def test_parse_finance_research_json_no_sources(self) -> None:
+        """Parsed object with no sources omits sources section."""
+        data = make_finance_research_json(content="Just an answer.", sources=[])
+        wrapper = YouSearchAPIWrapper(ydc_api_key="k")
+        response = wrapper._parse_finance_research_json(data)
+        result = wrapper._format_research_response(response)
+
+        assert result == "Just an answer."
+        assert "## Sources" not in result
+
+    def test_parse_finance_research_json_source_no_title(self) -> None:
+        """Source with no title falls back to URL."""
+        data = make_finance_research_json(
+            sources=[{"url": "https://sec.gov/filing", "title": None}],
+        )
+        wrapper = YouSearchAPIWrapper(ydc_api_key="k")
+        response = wrapper._parse_finance_research_json(data)
+        result = wrapper._format_research_response(response)
+
+        assert "[https://sec.gov/filing](https://sec.gov/filing)" in result
+
+
+class TestFinanceResearchHTTPCalls:
+    """Verify the wrapper makes correct HTTP calls for Finance Research."""
+
+    @patch("langchain_youdotcom._utilities.httpx.Client")
+    def test_raw_finance_calls_httpx(self, mock_client_cls: MagicMock) -> None:
+        """raw_finance() posts to the Finance Research API."""
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = make_finance_research_json()
+        mock_resp.raise_for_status = MagicMock()
+        mock_client = MagicMock()
+        mock_client.post.return_value = mock_resp
+        mock_client.__enter__ = MagicMock(return_value=mock_client)
+        mock_client.__exit__ = MagicMock(return_value=False)
+        mock_client_cls.return_value = mock_client
+
+        wrapper = YouSearchAPIWrapper(ydc_api_key="test-key")
+        result = wrapper.raw_finance("NVDA earnings")
+
+        mock_client.post.assert_called_once_with(
+            "https://api.you.com/v1/finance_research",
+            json={"input": "NVDA earnings", "research_effort": "deep"},
+        )
+        assert result.output.content == "Finance answer with [1] citations."
+
+    @patch("langchain_youdotcom._utilities.httpx.AsyncClient")
+    async def test_raw_finance_async_calls_httpx(
+        self, mock_client_cls: MagicMock
+    ) -> None:
+        """raw_finance_async() posts to the Finance Research API."""
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = make_finance_research_json()
+        mock_resp.raise_for_status = MagicMock()
+        mock_client = MagicMock()
+        mock_client.post = AsyncMock(return_value=mock_resp)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client_cls.return_value = mock_client
+
+        wrapper = YouSearchAPIWrapper(ydc_api_key="test-key")
+        result = await wrapper.raw_finance_async("AAPL cash flow")
+
+        mock_client.post.assert_called_once()
+        assert result.output.content == "Finance answer with [1] citations."
+
+    @patch("langchain_youdotcom._utilities.httpx.Client")
+    def test_finance_text_returns_markdown(self, mock_client_cls: MagicMock) -> None:
+        """finance_text() returns formatted markdown."""
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = make_finance_research_json(
+            content="Revenue grew 40% YoY."
+        )
+        mock_resp.raise_for_status = MagicMock()
+        mock_client = MagicMock()
+        mock_client.post.return_value = mock_resp
+        mock_client.__enter__ = MagicMock(return_value=mock_client)
+        mock_client.__exit__ = MagicMock(return_value=False)
+        mock_client_cls.return_value = mock_client
+
+        wrapper = YouSearchAPIWrapper(ydc_api_key="test-key")
+        result = wrapper.finance_text("NVDA revenue")
+
+        assert "Revenue grew 40% YoY." in result
+        assert "## Sources" in result
