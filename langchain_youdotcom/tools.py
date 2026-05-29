@@ -8,7 +8,7 @@ from langchain_core.documents import Document
 from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
 
-from langchain_youdotcom._utilities import YouSearchAPIWrapper
+from langchain_youdotcom._utilities import YouAPIWrapper
 
 
 class YouSearchInput(BaseModel):
@@ -27,6 +27,14 @@ class YouContentsInput(BaseModel):
     """Input schema for :class:`YouContentsTool`."""
 
     urls: list[str] = Field(description="URLs to fetch content from.")
+
+
+class YouFinanceResearchInput(BaseModel):
+    """Input schema for :class:`YouFinanceResearchTool`."""
+
+    query: str = Field(
+        description="Financial research query to investigate with You.com."
+    )
 
 
 def _format_docs(docs: list[Document]) -> str:
@@ -57,7 +65,7 @@ class YouSearchTool(BaseTool):
 
     name: str = "you_search"
     description: str = "Search the web using You.com and return relevant results."
-    api_wrapper: YouSearchAPIWrapper = Field(default_factory=YouSearchAPIWrapper)
+    api_wrapper: YouAPIWrapper = Field(default_factory=YouAPIWrapper)
     args_schema: type[BaseModel] = YouSearchInput
 
     def _run(self, query: str, **kwargs: Any) -> str:
@@ -108,7 +116,7 @@ class YouResearchTool(BaseTool):
         "Research a topic in depth using You.com and return a comprehensive "
         "answer with cited sources."
     )
-    api_wrapper: YouSearchAPIWrapper = Field(default_factory=YouSearchAPIWrapper)
+    api_wrapper: YouAPIWrapper = Field(default_factory=YouAPIWrapper)
     args_schema: type[BaseModel] = YouResearchInput
 
     def _run(self, query: str, **kwargs: Any) -> str:
@@ -153,7 +161,7 @@ class YouContentsTool(BaseTool):
 
     name: str = "you_contents"
     description: str = "Fetch and extract content from web pages using You.com."
-    api_wrapper: YouSearchAPIWrapper = Field(default_factory=YouSearchAPIWrapper)
+    api_wrapper: YouAPIWrapper = Field(default_factory=YouAPIWrapper)
     args_schema: type[BaseModel] = YouContentsInput
 
     def _run(self, urls: list[str], **kwargs: Any) -> str:
@@ -179,3 +187,57 @@ class YouContentsTool(BaseTool):
             Page contents formatted as a string.
         """
         return _format_docs(await self.api_wrapper.contents_async(urls))
+
+
+class YouFinanceResearchTool(BaseTool):
+    """Tool that queries the You.com Finance Research API.
+
+    Returns comprehensive, citation-backed answers to financial questions
+    from a finance-optimized index covering SEC filings, earnings, equity
+    prices, macro indicators, and financial news.
+
+    Requires a ``YDC_API_KEY`` environment variable or an explicit key on
+    the ``api_wrapper``.
+
+    Example:
+        .. code-block:: python
+
+            from langchain_youdotcom import YouFinanceResearchTool
+
+            tool = YouFinanceResearchTool()
+            result = tool.invoke("what drove NVIDIA's revenue growth in FY2025")
+    """
+
+    name: str = "you_finance_research"
+    description: str = (
+        "Research a financial question in depth using You.com Finance Research "
+        "and return a comprehensive answer with cited sources from a "
+        "finance-optimized index (SEC filings, earnings, equity prices, "
+        "macro indicators)."
+    )
+    api_wrapper: YouAPIWrapper = Field(default_factory=YouAPIWrapper)
+    args_schema: type[BaseModel] = YouFinanceResearchInput
+
+    def _run(self, query: str, **kwargs: Any) -> str:
+        """Run the You.com finance research tool.
+
+        Args:
+            query: The financial research query.
+            **kwargs: Additional keyword arguments.
+
+        Returns:
+            Finance research answer formatted as markdown with sources.
+        """
+        return self.api_wrapper.finance_text(query)
+
+    async def _arun(self, query: str, **kwargs: Any) -> str:
+        """Async run the You.com finance research tool.
+
+        Args:
+            query: The financial research query.
+            **kwargs: Additional keyword arguments.
+
+        Returns:
+            Finance research answer formatted as markdown with sources.
+        """
+        return await self.api_wrapper.finance_text_async(query)

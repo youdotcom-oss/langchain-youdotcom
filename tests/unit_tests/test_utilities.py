@@ -1,4 +1,4 @@
-"""Unit tests for YouSearchAPIWrapper."""
+"""Unit tests for YouAPIWrapper."""
 
 from __future__ import annotations
 
@@ -7,9 +7,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from langchain_youdotcom import YouSearchAPIWrapper
+from langchain_youdotcom import YouAPIWrapper
 from tests.unit_tests.conftest import (
     make_contents_page,
+    make_finance_research_json,
     make_livecrawl_contents,
     make_news_hit,
     make_research_response,
@@ -27,7 +28,7 @@ class TestInit:
         env = os.environ.copy()
         os.environ.pop("YDC_API_KEY", None)
         try:
-            wrapper = YouSearchAPIWrapper()
+            wrapper = YouAPIWrapper()
             assert wrapper.ydc_api_key.get_secret_value() == ""
         finally:
             os.environ.clear()
@@ -35,13 +36,13 @@ class TestInit:
 
     def test_init_with_explicit_key(self) -> None:
         """Wrapper accepts an explicit API key."""
-        wrapper = YouSearchAPIWrapper(ydc_api_key="test-key")
+        wrapper = YouAPIWrapper(ydc_api_key="test-key")
         assert wrapper.ydc_api_key.get_secret_value() == "test-key"
 
     def test_init_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Wrapper reads YDC_API_KEY from environment."""
         monkeypatch.setenv("YDC_API_KEY", "env-key")
-        wrapper = YouSearchAPIWrapper()
+        wrapper = YouAPIWrapper()
         assert wrapper.ydc_api_key.get_secret_value() == "env-key"
 
     def test_explicit_key_takes_precedence(
@@ -49,7 +50,7 @@ class TestInit:
     ) -> None:
         """Explicit key overrides environment variable."""
         monkeypatch.setenv("YDC_API_KEY", "env-key")
-        wrapper = YouSearchAPIWrapper(ydc_api_key="explicit-key")
+        wrapper = YouAPIWrapper(ydc_api_key="explicit-key")
         assert wrapper.ydc_api_key.get_secret_value() == "explicit-key"
 
 
@@ -62,7 +63,7 @@ class TestSearchParsing:
             snippets=["first snippet", "second snippet"],
         )
         response = make_search_response(web=[hit])
-        wrapper = YouSearchAPIWrapper(ydc_api_key="k")
+        wrapper = YouAPIWrapper(ydc_api_key="k")
         docs = wrapper._parse_search_response(response)
 
         assert len(docs) == 1
@@ -78,7 +79,7 @@ class TestSearchParsing:
             contents=contents,
         )
         response = make_search_response(web=[hit])
-        wrapper = YouSearchAPIWrapper(ydc_api_key="k")
+        wrapper = YouAPIWrapper(ydc_api_key="k")
         docs = wrapper._parse_search_response(response)
 
         assert len(docs) == 1
@@ -89,7 +90,7 @@ class TestSearchParsing:
         contents = make_livecrawl_contents(markdown=None, html="<h1>HTML</h1>")
         hit = make_web_hit(contents=contents)
         response = make_search_response(web=[hit])
-        wrapper = YouSearchAPIWrapper(ydc_api_key="k")
+        wrapper = YouAPIWrapper(ydc_api_key="k")
         docs = wrapper._parse_search_response(response)
 
         assert len(docs) == 1
@@ -99,7 +100,7 @@ class TestSearchParsing:
         """Only k documents are returned."""
         hits = [make_web_hit(url=f"https://example.com/{i}") for i in range(5)]
         response = make_search_response(web=hits)
-        wrapper = YouSearchAPIWrapper(ydc_api_key="k", k=2)
+        wrapper = YouAPIWrapper(ydc_api_key="k", k=2)
         docs = wrapper._parse_search_response(response)
 
         assert len(docs) == 2
@@ -108,7 +109,7 @@ class TestSearchParsing:
         """Snippet count is capped by n_snippets_per_hit."""
         hit = make_web_hit(snippets=["a", "b", "c"])
         response = make_search_response(web=[hit])
-        wrapper = YouSearchAPIWrapper(ydc_api_key="k", n_snippets_per_hit=1)
+        wrapper = YouAPIWrapper(ydc_api_key="k", n_snippets_per_hit=1)
         docs = wrapper._parse_search_response(response)
 
         assert docs[0].page_content == "a"
@@ -117,7 +118,7 @@ class TestSearchParsing:
         """News hits produce Documents."""
         hit = make_news_hit()
         response = make_search_response(news=[hit])
-        wrapper = YouSearchAPIWrapper(ydc_api_key="k")
+        wrapper = YouAPIWrapper(ydc_api_key="k")
         docs = wrapper._parse_search_response(response)
 
         assert len(docs) == 1
@@ -127,7 +128,7 @@ class TestSearchParsing:
         """No results returns an empty list."""
         response = MagicMock()
         response.results = None
-        wrapper = YouSearchAPIWrapper(ydc_api_key="k")
+        wrapper = YouAPIWrapper(ydc_api_key="k")
         docs = wrapper._parse_search_response(response)
 
         assert docs == []
@@ -140,7 +141,7 @@ class TestSearchParsing:
             page_age="2025-01-01",
         )
         response = make_search_response(web=[hit])
-        wrapper = YouSearchAPIWrapper(ydc_api_key="k")
+        wrapper = YouAPIWrapper(ydc_api_key="k")
         docs = wrapper._parse_search_response(response)
 
         assert docs[0].metadata["thumbnail_url"] == "https://img.example.com/thumb.jpg"
@@ -154,7 +155,7 @@ class TestContentsParsing:
     def test_markdown_page(self) -> None:
         """Contents page with markdown produces a Document."""
         page = make_contents_page(markdown="# Hello World")
-        wrapper = YouSearchAPIWrapper(ydc_api_key="k")
+        wrapper = YouAPIWrapper(ydc_api_key="k")
         docs = wrapper._parse_contents_response([page])
 
         assert len(docs) == 1
@@ -163,7 +164,7 @@ class TestContentsParsing:
     def test_html_fallback(self) -> None:
         """Contents page falls back to HTML when markdown is absent."""
         page = make_contents_page(markdown=None, html="<p>Hello</p>")
-        wrapper = YouSearchAPIWrapper(ydc_api_key="k")
+        wrapper = YouAPIWrapper(ydc_api_key="k")
         docs = wrapper._parse_contents_response([page])
 
         assert len(docs) == 1
@@ -175,7 +176,7 @@ class TestContentsParsing:
             site_name="Example Site",
             favicon_url="https://example.com/fav.ico",
         )
-        wrapper = YouSearchAPIWrapper(ydc_api_key="k")
+        wrapper = YouAPIWrapper(ydc_api_key="k")
         docs = wrapper._parse_contents_response([page])
 
         assert docs[0].metadata["site_name"] == "Example Site"
@@ -184,7 +185,7 @@ class TestContentsParsing:
     def test_skips_empty_pages(self) -> None:
         """Pages with no content are skipped."""
         page = make_contents_page(markdown=None, html=None)
-        wrapper = YouSearchAPIWrapper(ydc_api_key="k")
+        wrapper = YouAPIWrapper(ydc_api_key="k")
         docs = wrapper._parse_contents_response([page])
 
         assert docs == []
@@ -203,7 +204,7 @@ class TestSDKIntegration:
         mock_client.__exit__ = MagicMock(return_value=False)
         mock_you_cls.return_value = mock_client
 
-        wrapper = YouSearchAPIWrapper(ydc_api_key="test-key", count=5)
+        wrapper = YouAPIWrapper(ydc_api_key="test-key", count=5)
         docs = wrapper.results("test query")
 
         assert mock_you_cls.call_args.kwargs["api_key_auth"] == "test-key"
@@ -220,7 +221,7 @@ class TestSDKIntegration:
         mock_client.__exit__ = MagicMock(return_value=False)
         mock_you_cls.return_value = mock_client
 
-        wrapper = YouSearchAPIWrapper(ydc_api_key="test-key")
+        wrapper = YouAPIWrapper(ydc_api_key="test-key")
         docs = wrapper.contents(["https://example.com"])
 
         mock_client.contents.generate.assert_called_once()
@@ -238,7 +239,7 @@ class TestSDKIntegration:
         mock_client.__exit__ = MagicMock(return_value=False)
         mock_you_cls.return_value = mock_client
 
-        wrapper = YouSearchAPIWrapper(ydc_api_key="test-key", research_effort="lite")
+        wrapper = YouAPIWrapper(ydc_api_key="test-key", research_effort="lite")
         result = wrapper.raw_research("test query")
 
         mock_client.research.assert_called_once()
@@ -257,7 +258,7 @@ class TestSDKIntegration:
         mock_client.__exit__ = MagicMock(return_value=False)
         mock_you_cls.return_value = mock_client
 
-        wrapper = YouSearchAPIWrapper(ydc_api_key="test-key")
+        wrapper = YouAPIWrapper(ydc_api_key="test-key")
         result = wrapper.research_text("test query")
 
         assert isinstance(result, str)
@@ -274,7 +275,7 @@ class TestSDKIntegration:
         mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_you_cls.return_value = mock_client
 
-        wrapper = YouSearchAPIWrapper(ydc_api_key="test-key")
+        wrapper = YouAPIWrapper(ydc_api_key="test-key")
         result = await wrapper.research_text_async("test query")
 
         mock_client.research_async.assert_called_once()
@@ -293,7 +294,7 @@ class TestResearchFormatting:
             make_research_source(url="https://b.com", title="Source B"),
         ]
         response = make_research_response(content="The answer is 42.", sources=sources)
-        wrapper = YouSearchAPIWrapper(ydc_api_key="k")
+        wrapper = YouAPIWrapper(ydc_api_key="k")
         result = wrapper._format_research_response(response)
 
         assert result.startswith("The answer is 42.")
@@ -304,7 +305,7 @@ class TestResearchFormatting:
     def test_format_without_sources(self) -> None:
         """Response without sources omits the sources section."""
         response = make_research_response(content="Just an answer.", sources=[])
-        wrapper = YouSearchAPIWrapper(ydc_api_key="k")
+        wrapper = YouAPIWrapper(ydc_api_key="k")
         result = wrapper._format_research_response(response)
 
         assert result == "Just an answer."
@@ -314,14 +315,14 @@ class TestResearchFormatting:
         """Source with no title uses URL as link text."""
         source = make_research_source(url="https://c.com", title=None)
         response = make_research_response(sources=[source])
-        wrapper = YouSearchAPIWrapper(ydc_api_key="k")
+        wrapper = YouAPIWrapper(ydc_api_key="k")
         result = wrapper._format_research_response(response)
 
         assert "[https://c.com](https://c.com)" in result
 
     def test_research_params_without_effort(self) -> None:
         """Params omit research_effort when not set."""
-        wrapper = YouSearchAPIWrapper(ydc_api_key="k")
+        wrapper = YouAPIWrapper(ydc_api_key="k")
         params = wrapper._research_params("my query")
 
         assert params == {"input": "my query"}
@@ -330,8 +331,136 @@ class TestResearchFormatting:
         """Params include ResearchEffort enum when set."""
         from youdotcom.models import ResearchEffort
 
-        wrapper = YouSearchAPIWrapper(ydc_api_key="k", research_effort="deep")
+        wrapper = YouAPIWrapper(ydc_api_key="k", research_effort="deep")
         params = wrapper._research_params("my query")
 
         assert params["input"] == "my query"
         assert params["research_effort"] == ResearchEffort.DEEP
+
+
+class TestFinanceResearchParams:
+    """Finance Research parameter building."""
+
+    def test_default_effort_is_deep(self) -> None:
+        """Default finance research effort is deep."""
+        wrapper = YouAPIWrapper(ydc_api_key="k")
+        params = wrapper._finance_research_params("NVDA earnings")
+        assert params == {"input": "NVDA earnings", "research_effort": "deep"}
+
+    def test_explicit_effort(self) -> None:
+        """Explicit research_effort is passed through."""
+        wrapper = YouAPIWrapper(ydc_api_key="k", research_effort="exhaustive")
+        params = wrapper._finance_research_params("AAPL revenue")
+        assert params["research_effort"] == "exhaustive"
+
+    def test_incompatible_effort_raises(self) -> None:
+        """Incompatible effort level raises ValueError."""
+        wrapper = YouAPIWrapper(ydc_api_key="k", research_effort="lite")
+        with pytest.raises(ValueError, match="Finance Research"):
+            wrapper._finance_research_params("query")
+
+
+class TestFinanceResearchParsing:
+    """Parsing of Finance Research JSON responses."""
+
+    def test_parse_finance_research_json(self) -> None:
+        """Parsed object works with _format_research_response."""
+        data = make_finance_research_json(
+            content="NVIDIA revenue grew due to data center.",
+            sources=[
+                {"url": "https://sec.gov/nvda", "title": "NVIDIA 10-K"},
+            ],
+        )
+        wrapper = YouAPIWrapper(ydc_api_key="k")
+        response = wrapper._parse_finance_research_json(data)
+        result = wrapper._format_research_response(response)
+
+        assert "NVIDIA revenue grew" in result
+        assert "## Sources" in result
+        assert "[NVIDIA 10-K](https://sec.gov/nvda)" in result
+
+    def test_parse_finance_research_json_no_sources(self) -> None:
+        """Parsed object with no sources omits sources section."""
+        data = make_finance_research_json(content="Just an answer.", sources=[])
+        wrapper = YouAPIWrapper(ydc_api_key="k")
+        response = wrapper._parse_finance_research_json(data)
+        result = wrapper._format_research_response(response)
+
+        assert result == "Just an answer."
+        assert "## Sources" not in result
+
+    def test_parse_finance_research_json_source_no_title(self) -> None:
+        """Source with no title falls back to URL."""
+        data = make_finance_research_json(
+            sources=[{"url": "https://sec.gov/filing", "title": None}],
+        )
+        wrapper = YouAPIWrapper(ydc_api_key="k")
+        response = wrapper._parse_finance_research_json(data)
+        result = wrapper._format_research_response(response)
+
+        assert "[https://sec.gov/filing](https://sec.gov/filing)" in result
+
+
+class TestFinanceResearchHTTPCalls:
+    """Verify the wrapper makes correct HTTP calls for Finance Research."""
+
+    @patch("langchain_youdotcom._utilities.httpx.Client")
+    def test_raw_finance_calls_httpx(self, mock_client_cls: MagicMock) -> None:
+        """raw_finance() posts to the Finance Research API."""
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = make_finance_research_json()
+        mock_resp.raise_for_status = MagicMock()
+        mock_client = MagicMock()
+        mock_client.post.return_value = mock_resp
+        mock_client.__enter__ = MagicMock(return_value=mock_client)
+        mock_client.__exit__ = MagicMock(return_value=False)
+        mock_client_cls.return_value = mock_client
+
+        wrapper = YouAPIWrapper(ydc_api_key="test-key")
+        result = wrapper.raw_finance("NVDA earnings")
+
+        mock_client.post.assert_called_once_with(
+            "https://api.you.com/v1/finance_research",
+            json={"input": "NVDA earnings", "research_effort": "deep"},
+        )
+        assert result.output.content == "Finance answer with [1] citations."
+
+    @patch("langchain_youdotcom._utilities.httpx.AsyncClient")
+    async def test_raw_finance_async_calls_httpx(
+        self, mock_client_cls: MagicMock
+    ) -> None:
+        """raw_finance_async() posts to the Finance Research API."""
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = make_finance_research_json()
+        mock_resp.raise_for_status = MagicMock()
+        mock_client = MagicMock()
+        mock_client.post = AsyncMock(return_value=mock_resp)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client_cls.return_value = mock_client
+
+        wrapper = YouAPIWrapper(ydc_api_key="test-key")
+        result = await wrapper.raw_finance_async("AAPL cash flow")
+
+        mock_client.post.assert_called_once()
+        assert result.output.content == "Finance answer with [1] citations."
+
+    @patch("langchain_youdotcom._utilities.httpx.Client")
+    def test_finance_text_returns_markdown(self, mock_client_cls: MagicMock) -> None:
+        """finance_text() returns formatted markdown."""
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = make_finance_research_json(
+            content="Revenue grew 40% YoY."
+        )
+        mock_resp.raise_for_status = MagicMock()
+        mock_client = MagicMock()
+        mock_client.post.return_value = mock_resp
+        mock_client.__enter__ = MagicMock(return_value=mock_client)
+        mock_client.__exit__ = MagicMock(return_value=False)
+        mock_client_cls.return_value = mock_client
+
+        wrapper = YouAPIWrapper(ydc_api_key="test-key")
+        result = wrapper.finance_text("NVDA revenue")
+
+        assert "Revenue grew 40% YoY." in result
+        assert "## Sources" in result

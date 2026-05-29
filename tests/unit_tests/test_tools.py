@@ -8,13 +8,15 @@ from langchain_core.documents import Document
 from langchain_core.tools import BaseTool
 
 from langchain_youdotcom import (
+    YouAPIWrapper,
     YouContentsTool,
+    YouFinanceResearchTool,
     YouResearchTool,
-    YouSearchAPIWrapper,
     YouSearchTool,
 )
 from tests.unit_tests.conftest import (
     make_contents_page,
+    make_finance_research_json,
     make_research_response,
     make_search_response,
     make_web_hit,
@@ -70,9 +72,7 @@ class TestYouSearchTool:
                 metadata={"title": "T", "url": "https://x.com"},
             )
         ]
-        with patch.object(
-            YouSearchAPIWrapper, "results", return_value=docs
-        ) as mock_results:
+        with patch.object(YouAPIWrapper, "results", return_value=docs) as mock_results:
             tool = YouSearchTool()
             result = tool._run("test")
 
@@ -126,7 +126,7 @@ class TestYouContentsTool:
             )
         ]
         with patch.object(
-            YouSearchAPIWrapper, "contents", return_value=docs
+            YouAPIWrapper, "contents", return_value=docs
         ) as mock_contents:
             tool = YouContentsTool()
             result = tool._run(["https://x.com"])
@@ -174,7 +174,7 @@ class TestYouResearchTool:
     def test_run_with_patched_wrapper(self) -> None:
         """_run delegates to the api_wrapper."""
         with patch.object(
-            YouSearchAPIWrapper,
+            YouAPIWrapper,
             "research_text",
             return_value="mocked answer",
         ) as mock_research:
@@ -187,7 +187,7 @@ class TestYouResearchTool:
     async def test_arun_with_patched_wrapper(self) -> None:
         """_arun delegates to the api_wrapper async method."""
         with patch.object(
-            YouSearchAPIWrapper,
+            YouAPIWrapper,
             "research_text_async",
             return_value="async mocked answer",
         ) as mock_research:
@@ -196,3 +196,70 @@ class TestYouResearchTool:
 
         mock_research.assert_called_once_with("test")
         assert result == "async mocked answer"
+
+
+class TestYouFinanceResearchTool:
+    """Tests for YouFinanceResearchTool."""
+
+    def test_is_base_tool_subclass(self) -> None:
+        """YouFinanceResearchTool must extend BaseTool."""
+        assert issubclass(YouFinanceResearchTool, BaseTool)
+
+    def test_default_name(self) -> None:
+        """Tool should have a sensible default name."""
+        tool = YouFinanceResearchTool()
+        assert tool.name == "you_finance_research"
+
+    def test_default_description(self) -> None:
+        """Tool should have a non-empty description."""
+        tool = YouFinanceResearchTool()
+        assert len(tool.description) > 0
+
+    @patch("langchain_youdotcom._utilities.httpx.Client")
+    def test_run_returns_formatted_finance_research(
+        self, mock_client_cls: MagicMock
+    ) -> None:
+        """_run delegates to api_wrapper.finance_text."""
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = make_finance_research_json(
+            content="NVIDIA revenue grew 40%."
+        )
+        mock_resp.raise_for_status = MagicMock()
+        mock_client = MagicMock()
+        mock_client.post.return_value = mock_resp
+        mock_client.__enter__ = MagicMock(return_value=mock_client)
+        mock_client.__exit__ = MagicMock(return_value=False)
+        mock_client_cls.return_value = mock_client
+
+        tool = YouFinanceResearchTool()
+        result = tool._run("NVDA earnings")
+
+        assert isinstance(result, str)
+        assert "NVIDIA revenue grew 40%." in result
+        assert "## Sources" in result
+
+    def test_run_with_patched_wrapper(self) -> None:
+        """_run delegates to the api_wrapper."""
+        with patch.object(
+            YouAPIWrapper,
+            "finance_text",
+            return_value="mocked finance answer",
+        ) as mock_finance:
+            tool = YouFinanceResearchTool()
+            result = tool._run("test")
+
+        mock_finance.assert_called_once_with("test")
+        assert result == "mocked finance answer"
+
+    async def test_arun_with_patched_wrapper(self) -> None:
+        """_arun delegates to the api_wrapper async method."""
+        with patch.object(
+            YouAPIWrapper,
+            "finance_text_async",
+            return_value="async mocked finance answer",
+        ) as mock_finance:
+            tool = YouFinanceResearchTool()
+            result = await tool._arun("test")
+
+        mock_finance.assert_called_once_with("test")
+        assert result == "async mocked finance answer"

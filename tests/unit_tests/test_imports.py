@@ -3,7 +3,9 @@
 from langchain_youdotcom import __all__
 
 EXPECTED_EXPORTS = [
+    "YouAPIWrapper",
     "YouContentsTool",
+    "YouFinanceResearchTool",
     "YouResearchTool",
     "YouRetriever",
     "YouSearchAPIWrapper",

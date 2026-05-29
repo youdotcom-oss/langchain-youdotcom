@@ -11,14 +11,14 @@ from langchain_core.callbacks import (
 from langchain_core.documents import Document
 from langchain_core.retrievers import BaseRetriever
 
-from langchain_youdotcom._utilities import YouSearchAPIWrapper
+from langchain_youdotcom._utilities import YouAPIWrapper
 
 
-class YouRetriever(BaseRetriever, YouSearchAPIWrapper):
+class YouRetriever(BaseRetriever, YouAPIWrapper):
     """Retriever that uses the You.com Search API.
 
     Inherits all configuration fields from
-    :class:`~langchain_youdotcom.YouSearchAPIWrapper` (``ydc_api_key``,
+    :class:`~langchain_youdotcom.YouAPIWrapper` (``ydc_api_key``,
     ``k``, ``count``, ``livecrawl``, etc.).
 
     Example:
