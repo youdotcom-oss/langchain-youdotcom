@@ -439,6 +439,7 @@ class YouAPIWrapper(BaseModel):
             "url": hit.url or "",
             "title": hit.title or "",
             "description": hit.description or "",
+            "source": "web",
         }
         if hit.thumbnail_url:
             metadata["thumbnail_url"] = hit.thumbnail_url
@@ -471,6 +472,7 @@ class YouAPIWrapper(BaseModel):
             "url": hit.url or "",
             "title": hit.title or "",
             "description": hit.description or "",
+            "source": "news",
         }
         if hit.thumbnail_url:
             metadata["thumbnail_url"] = hit.thumbnail_url

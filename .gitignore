@@ -12,3 +12,4 @@ build/
 *.so
 .venv/
 .env
+.idea/
