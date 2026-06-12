@@ -70,6 +70,7 @@ class TestSearchParsing:
         assert docs[0].page_content == "first snippet\nsecond snippet"
         assert docs[0].metadata["url"] == "https://example.com"
         assert docs[0].metadata["title"] == "Example"
+        assert docs[0].metadata["source"] == "web"
 
     def test_web_hit_prefers_livecrawl_markdown(self) -> None:
         """Livecrawl markdown takes priority over snippets."""
@@ -123,6 +124,7 @@ class TestSearchParsing:
 
         assert len(docs) == 1
         assert docs[0].metadata["url"] == "https://news.example.com"
+        assert docs[0].metadata["source"] == "news"
 
     def test_empty_response(self) -> None:
         """No results returns an empty list."""
