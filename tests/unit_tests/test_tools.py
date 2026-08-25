@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 from langchain_core.documents import Document
 from langchain_core.tools import BaseTool
 
 from langchain_youdotcom import (
+    YouAnswerTool,
     YouAPIWrapper,
     YouContentsTool,
     YouFinanceResearchTool,
@@ -15,8 +17,9 @@ from langchain_youdotcom import (
     YouSearchTool,
 )
 from tests.unit_tests.conftest import (
+    make_answer_response,
     make_contents_page,
-    make_finance_research_json,
+    make_finance_research_response,
     make_research_response,
     make_search_response,
     make_web_hit,
@@ -53,7 +56,7 @@ class TestYouSearchTool:
             ]
         )
         mock_client = MagicMock()
-        mock_client.search.unified.return_value = response
+        mock_client.search.return_value = response
         mock_client.__enter__ = MagicMock(return_value=mock_client)
         mock_client.__exit__ = MagicMock(return_value=False)
         mock_you_cls.return_value = mock_client
@@ -106,7 +109,7 @@ class TestYouContentsTool:
             markdown="# Page Content",
         )
         mock_client = MagicMock()
-        mock_client.contents.generate.return_value = [page]
+        mock_client.contents.return_value = [page]
         mock_client.__enter__ = MagicMock(return_value=mock_client)
         mock_client.__exit__ = MagicMock(return_value=False)
         mock_you_cls.return_value = mock_client
@@ -215,21 +218,19 @@ class TestYouFinanceResearchTool:
         tool = YouFinanceResearchTool()
         assert len(tool.description) > 0
 
-    @patch("langchain_youdotcom._utilities.httpx.Client")
-    def test_run_returns_formatted_finance_research(
-        self, mock_client_cls: MagicMock
+    @patch("langchain_youdotcom._utilities.You")
+    def test_run_delegates_to_sdk_finance_research(
+        self, mock_you_cls: MagicMock
     ) -> None:
-        """_run delegates to api_wrapper.finance_text."""
-        mock_resp = MagicMock()
-        mock_resp.json.return_value = make_finance_research_json(
-            content="NVIDIA revenue grew 40%."
+        """_run paths through YouAPIWrapper to ``client.finance_research``."""
+        response = make_finance_research_response(
+            content="NVIDIA revenue grew 40%.",
         )
-        mock_resp.raise_for_status = MagicMock()
         mock_client = MagicMock()
-        mock_client.post.return_value = mock_resp
+        mock_client.finance_research.return_value = response
         mock_client.__enter__ = MagicMock(return_value=mock_client)
         mock_client.__exit__ = MagicMock(return_value=False)
-        mock_client_cls.return_value = mock_client
+        mock_you_cls.return_value = mock_client
 
         tool = YouFinanceResearchTool()
         result = tool._run("NVDA earnings")
@@ -263,3 +264,147 @@ class TestYouFinanceResearchTool:
 
         mock_finance.assert_called_once_with("test")
         assert result == "async mocked finance answer"
+
+
+class TestYouAnswerTool:
+    """Tests for YouAnswerTool."""
+
+    def test_is_base_tool_subclass(self) -> None:
+        """YouAnswerTool must extend BaseTool."""
+        assert issubclass(YouAnswerTool, BaseTool)
+
+    def test_default_name(self) -> None:
+        """Tool should default to ``you_answer``."""
+        tool = YouAnswerTool()
+        assert tool.name == "you_answer"
+
+    def test_default_description(self) -> None:
+        """Tool should have a non-empty description."""
+        tool = YouAnswerTool()
+        assert len(tool.description) > 0
+
+    @patch("langchain_youdotcom._utilities.You")
+    def test_run_return_formatted_answer(self, mock_you_cls: MagicMock) -> None:
+        """_run delegates to api_wrapper.answer_text and returns markdown."""
+        response = make_answer_response(
+            answer="RAG stands for retrieval augmented generation.",
+            citations=[
+                {"source": "https://example.com/rag", "excerpts": ["..."]},
+            ],
+        )
+        mock_client = MagicMock()
+        mock_client.answer.return_value = response
+        mock_client.__enter__ = MagicMock(return_value=mock_client)
+        mock_client.__exit__ = MagicMock(return_value=False)
+        mock_you_cls.return_value = mock_client
+
+        tool = YouAnswerTool()
+        result = tool.invoke({"query": "what is RAG"})
+
+        assert isinstance(result, str)
+        assert "RAG stands for retrieval augmented generation." in result
+        assert "## Citations" in result
+        assert "https://example.com/rag" in result
+
+    @patch("langchain_youdotcom._utilities.You")
+    def test_run_forwards_filter_kwargs(self, mock_you_cls: MagicMock) -> None:
+        """All filter kwargs reach ``client.answer``."""
+        response = make_answer_response(answer="result")
+        mock_client = MagicMock()
+        mock_client.answer.return_value = response
+        mock_client.__enter__ = MagicMock(return_value=mock_client)
+        mock_client.__exit__ = MagicMock(return_value=False)
+        mock_you_cls.return_value = mock_client
+
+        tool = YouAnswerTool()
+        tool.invoke(
+            {
+                "query": "quantum",
+                "freshness": "week",
+                "country": "US",
+                "language": "EN",
+                "safesearch": "moderate",
+                "include_domains": ["example.com"],
+                "exclude_domains": None,
+                "boost_domains": None,
+            }
+        )
+
+        call_kwargs = mock_client.answer.call_args.kwargs
+        assert call_kwargs["query"] == "quantum"
+        assert call_kwargs["freshness"] == "week"
+        assert call_kwargs["country"] == "US"
+        assert call_kwargs["language"] == "EN"
+        assert call_kwargs["safesearch"] == "moderate"
+        assert call_kwargs["include_domains"] == ["example.com"]
+
+    def test_run_with_patched_wrapper(self) -> None:
+        """_run delegates to api_wrapper.answer_text."""
+        with patch.object(
+            YouAPIWrapper,
+            "answer_text",
+            return_value="mocked answer",
+        ) as mock_answer:
+            tool = YouAnswerTool()
+            result = tool.invoke({"query": "test"})
+
+        mock_answer.assert_called_once()
+        assert result == "mocked answer"
+
+    async def test_arun_with_patched_wrapper(self) -> None:
+        """_arun delegates to api_wrapper.answer_text_async."""
+        with patch.object(
+            YouAPIWrapper,
+            "answer_text_async",
+            return_value="async mocked answer",
+        ) as mock_answer:
+            tool = YouAnswerTool()
+            result = await tool._arun("test")
+
+        mock_answer.assert_called_once()
+        assert result == "async mocked answer"
+
+    def test_run_rejects_include_with_exclude(self) -> None:
+        """Combine-validation happens before any HTTP call."""
+        with pytest.raises(ValueError, match="include_domains"):
+            YouAPIWrapper().answer_text(
+                "what is RAG",
+                include_domains=["a.com"],
+                exclude_domains=["b.com"],
+            )
+
+    def test_run_rejects_include_with_boost(self) -> None:
+        """Combine-validation happens before any HTTP call."""
+        with pytest.raises(ValueError, match="include_domains"):
+            YouAPIWrapper().answer_text(
+                "what is RAG",
+                include_domains=["a.com"],
+                boost_domains=["b.com"],
+            )
+
+    def test_run_rejects_query_over_400_chars(self) -> None:
+        """Server rejects queries longer than 400 chars; surface error locally."""
+        too_long = "x" * 401
+        with pytest.raises(ValueError, match="400"):
+            YouAPIWrapper().answer_text(too_long)
+
+    def test_run_rejects_empty_query(self) -> None:
+        """Empty queries are rejected without an HTTP call."""
+        with pytest.raises(ValueError, match="query"):
+            YouAPIWrapper().answer_text("")
+
+    @patch("langchain_youdotcom._utilities.You")
+    async def test_arun_delegates_to_sdk_answer(self, mock_you_cls: MagicMock) -> None:
+        """Async _arun calls ``client.answer_async``."""
+        response = make_answer_response(answer="async result")
+        mock_client = MagicMock()
+        mock_client.answer_async = AsyncMock(return_value=response)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_you_cls.return_value = mock_client
+
+        tool = YouAnswerTool()
+        result = await tool._arun("test")
+
+        assert "async result" in result
+        assert "## Citations" in result

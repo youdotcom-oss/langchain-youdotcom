@@ -41,7 +41,7 @@ class TestYouRetriever:
         """invoke() returns documents from search results."""
         response = make_search_response(web=[make_web_hit(snippets=["hello world"])])
         mock_client = MagicMock()
-        mock_client.search.unified.return_value = response
+        mock_client.search.return_value = response
         mock_client.__enter__ = MagicMock(return_value=mock_client)
         mock_client.__exit__ = MagicMock(return_value=False)
         mock_you_cls.return_value = mock_client

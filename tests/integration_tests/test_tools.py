@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from langchain_youdotcom import (
+    YouAnswerTool,
     YouAPIWrapper,
     YouContentsTool,
     YouFinanceResearchTool,
@@ -63,3 +64,26 @@ def test_finance_research_tool_basic() -> None:
     assert isinstance(result, str)
     assert len(result) > 0
     assert "## Sources" in result
+
+
+def test_answer_tool_basic() -> None:
+    """YouAnswerTool returns a non-empty string with citations."""
+    tool = YouAnswerTool()
+    result = tool.invoke({"query": "what is retrieval augmented generation"})
+
+    print(result)  # noqa: T201
+    assert isinstance(result, str)
+    assert len(result) > 0
+    assert "http" in result  # citation URLs appear in formatted output
+
+
+def test_answer_tool_with_freshness() -> None:
+    """YouAnswerTool accepts the freshness filter."""
+    tool = YouAnswerTool()
+    result = tool.invoke(
+        {"query": "python release", "freshness": "week"},
+    )
+
+    print(result)  # noqa: T201
+    assert isinstance(result, str)
+    assert len(result) > 0

@@ -4,7 +4,7 @@
 [![PyPI - License](https://img.shields.io/pypi/l/langchain-youdotcom)](https://opensource.org/licenses/MIT)
 [![PyPI - Downloads](https://img.shields.io/pepy/dt/langchain-youdotcom)](https://pypistats.org/packages/langchain-youdotcom)
 
-LangChain partner package for [You.com](https://you.com) search, content extraction, research, and finance research APIs.
+LangChain partner package for [You.com](https://you.com) search, content extraction, research, finance research, and answer APIs.
 
 [Installation](#installation) | [Credentials](#credentials) | [Tools](#tools) | [Retriever](#retriever) | [API Wrapper](#youapiwrapper) | [Resources](#resources)
 
@@ -30,6 +30,8 @@ from langchain_youdotcom import YouSearchTool, YouAPIWrapper
 tool = YouSearchTool(api_wrapper=YouAPIWrapper(ydc_api_key="your-api-key"))
 ```
 
+Every outbound request emits an `X-Client-Info` header that identifies the call as originating from `langchain-youdotcom`, so You.com can attribute usage correctly. No action required.
+
 ## Tools
 
 ### YouSearchTool
@@ -44,8 +46,8 @@ Search the web with up to date results. Supports geographic filtering, freshness
 | `country` | `str \| None` | `None` | Two-letter country code to focus results geographically |
 | `freshness` | `str \| None` | `None` | Filter by recency: `day`, `week`, `month`, or `year` |
 | `language` | `str \| None` | `None` | BCP-47 language code for results |
-| `livecrawl` | `str \| None` | `None` | Fetch full page content: `web`, `news`, or `all` |
-| `livecrawl_formats` | `str \| None` | `None` | Format for livecrawled content: `html` or `markdown` |
+| `livecrawl` | `str \| None` | `None` | Deprecated by the SDK; will be removed in a future release. Use the SDK's `extraction` object directly via [the Search API reference](https://docs.you.com/api-reference/search) until a wrapper-level field lands. Fetch full page content: `web`, `news`, or `all`. |
+| `livecrawl_formats` | `list[str] \| None` | `None` | Deprecated by the SDK; will be removed in a future release. Format for livecrawled content as a list, e.g. `["html", "markdown"]`. |
 | `offset` | `int \| None` | `None` | Pagination offset, 0-9 |
 | `safesearch` | `str \| None` | `None` | Content filter: `off`, `moderate`, or `strict` |
 | `k` | `int \| None` | `None` | Max documents to return |
@@ -62,8 +64,7 @@ tool = YouSearchTool(
         count=5,
         country="US",
         freshness="week",
-        livecrawl="web",
-        livecrawl_formats="markdown",
+        safesearch="moderate",
     ),
 )
 
@@ -106,7 +107,7 @@ Content format and timeout are configured when calling the wrapper directly (see
 |-----------|------|---------|-------------|
 | `urls` | `list[str]` | — | URLs to extract content from (required) |
 | `formats` | `list[str] \| None` | `["markdown", "metadata"]` | Output formats: `markdown`, `html`, and/or `metadata` |
-| `crawl_timeout` | `float \| None` | `None` | Per-URL crawl timeout in seconds |
+| `crawl_timeout` | `int \| None` | `None` | Per-URL crawl timeout in seconds |
 
 ```python
 from langchain_youdotcom import YouContentsTool
@@ -134,6 +135,7 @@ Get a comprehensive, cited answer to a complex question. The Research API search
 | `standard` | Balanced speed and depth (default) |
 | `deep` | More time researching and cross-referencing sources |
 | `exhaustive` | Most thorough option for complex research tasks |
+| `frontier` | Highest-quality tier. Only supported by the task-based API (`background=true`); sending it to the sync API returns a 422, so `YouResearchTool` does not handle it — use the SDK directly for `frontier` runs. |
 
 **Invocation args:**
 
@@ -191,6 +193,57 @@ result = tool.invoke("compare gross margins of Apple, Microsoft, and Google over
 print(result)
 ```
 
+### YouAnswerTool
+
+Get a single, synthesized answer to a focused live-web question with inline citations. The Answer API is optimized for short, single-question lookups (faster than Research) and returns a synthesized response plus a `## Citations` section listing each source URL.
+
+The 0.4.0 release adds `YouAnswerTool` as the recommended entry point for any single-question workflow. Reach for `YouResearchTool` only when the question needs synthesis across multiple sources.
+
+**Invocation args:**
+
+- `query` (required, `str`): The live-web question. Max 400 characters.
+- `freshness` (optional, `str`): Recency filter: `day`, `week`, `month`, `year`, or a date range.
+- `country` (optional, `str`): ISO 3166-1 alpha-2 country code for geographical focus.
+- `language` (optional, `str`): BCP 47 language tag.
+- `safesearch` (optional, `str`): Content filter: `off`, `moderate`, or `strict`.
+- `include_domains` (optional, `list[str]`): Restrict results to specific domains.
+- `exclude_domains` (optional, `list[str]`): Exclude specific domains. Cannot be combined with `include_domains`.
+- `boost_domains` (optional, `list[str]`): Boost specific domains in the ranking. Cannot be combined with `include_domains`.
+
+```python
+from langchain_youdotcom import YouAnswerTool
+
+tool = YouAnswerTool()
+result = tool.invoke({"query": "what is retrieval augmented generation"})
+print(result)
+```
+
+With filters:
+
+```python
+result = tool.invoke(
+    {
+        "query": "latest python release",
+        "freshness": "week",
+        "country": "US",
+        "language": "EN",
+        "safesearch": "moderate",
+    }
+)
+```
+
+With domain restriction:
+
+```python
+result = tool.invoke(
+    {
+        "query": "langchain release notes",
+        "exclude_domains": ["pinterest.com"],
+        "boost_domains": ["github.com"],
+    }
+)
+```
+
 ## Retriever
 
 The simplest way to get You.com search results as LangChain documents. Accepts all search parameters from [YouSearchTool](#yousearchtool).
@@ -213,8 +266,6 @@ With search parameters:
 retriever = YouRetriever(
     k=5,
     count=10,
-    livecrawl="web",
-    livecrawl_formats="markdown",
     country="US",
     freshness="week",
     safesearch="moderate",
@@ -265,11 +316,29 @@ raw = wrapper.raw_research("explain quantum entanglement")
 # finance research -> formatted markdown with sources
 text = wrapper.finance_text("what drove NVIDIA's revenue growth in FY2025")
 
-# raw response (parsed from JSON)
+# raw SDK response (FinanceResearchResponse)
 raw = wrapper.raw_finance("compare AAPL and MSFT gross margins")
 ```
 
-Async variants are available for all methods: `results_async`, `raw_results_async`, `contents_async`, `research_text_async`, `raw_research_async`, `finance_text_async`, `raw_finance_async`.
+**Answer:**
+
+```python
+# answer -> formatted markdown with citations
+text = wrapper.answer_text(
+    "what is retrieval augmented generation",
+    freshness="week",
+    country="US",
+    safesearch="moderate",
+)
+
+# raw SDK response
+raw = wrapper.raw_answer(
+    "what is retrieval augmented generation",
+    include_domains=["arxiv.org"],
+)
+```
+
+Async variants are available for all methods: `results_async`, `raw_results_async`, `contents_async`, `research_text_async`, `raw_research_async`, `finance_text_async`, `raw_finance_async`, `answer_text_async`, `raw_answer_async`.
 
 ## Resources
 
@@ -278,6 +347,7 @@ Async variants are available for all methods: `results_async`, `raw_results_asyn
 - [Contents API reference](https://docs.you.com/api-reference/contents)
 - [Research API reference](https://docs.you.com/api-reference/research)
 - [Finance Research API reference](https://docs.you.com/api-reference/finance-research)
+- [Answer API reference](https://docs.you.com/api-reference/answer)
 - [You.com API keys](https://you.com/platform/api-keys)
 
 ## Development

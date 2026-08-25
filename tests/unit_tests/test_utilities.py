@@ -8,9 +8,14 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from langchain_youdotcom import YouAPIWrapper
+from langchain_youdotcom._utilities import (
+    _CLIENT_APP_NAME,
+    _CLIENT_APP_VERSION,
+)
 from tests.unit_tests.conftest import (
+    make_answer_response,
     make_contents_page,
-    make_finance_research_json,
+    make_finance_research_response,
     make_livecrawl_contents,
     make_news_hit,
     make_research_response,
@@ -21,7 +26,7 @@ from tests.unit_tests.conftest import (
 
 
 class TestInit:
-    """Initialization and API key handling."""
+    """Initialization, API key handling, and X-Client-Info attribution."""
 
     def test_init_default_empty_key(self) -> None:
         """Wrapper initializes with empty key when env var is unset."""
@@ -52,6 +57,41 @@ class TestInit:
         monkeypatch.setenv("YDC_API_KEY", "env-key")
         wrapper = YouAPIWrapper(ydc_api_key="explicit-key")
         assert wrapper.ydc_api_key.get_secret_value() == "explicit-key"
+
+    @patch("langchain_youdotcom._utilities.You")
+    def test_zero_key_passes_api_key_auth_none(self, mock_you_cls: MagicMock) -> None:
+        """Empty key is normalized to ``api_key_auth=None`` for SDK 3.x."""
+        mock_client = MagicMock()
+        mock_you_cls.return_value = mock_client
+
+        env = os.environ.copy()
+        os.environ.pop("YDC_API_KEY", None)
+        try:
+            wrapper = YouAPIWrapper()
+            wrapper._make_client()
+        finally:
+            os.environ.clear()
+            os.environ.update(env)
+
+        assert mock_you_cls.call_args.kwargs["api_key_auth"] is None
+
+    @patch("langchain_youdotcom._utilities.You")
+    def test_make_client_sets_app_attribution(self, mock_you_cls: MagicMock) -> None:
+        """Every outbound call goes out with ``X-Client-Info`` attribution."""
+        mock_client = MagicMock()
+        mock_you_cls.return_value = mock_client
+
+        env = os.environ.copy()
+        os.environ.pop("YDC_API_KEY", None)
+        try:
+            wrapper = YouAPIWrapper(ydc_api_key="k")
+            wrapper._make_client()
+        finally:
+            os.environ.clear()
+            os.environ.update(env)
+
+        assert mock_you_cls.call_args.kwargs["app_name"] == _CLIENT_APP_NAME
+        assert mock_you_cls.call_args.kwargs["app_version"] == _CLIENT_APP_VERSION
 
 
 class TestSearchParsing:
@@ -194,14 +234,14 @@ class TestContentsParsing:
 
 
 class TestSDKIntegration:
-    """Verify the wrapper calls the SDK correctly."""
+    """Verify the wrapper calls the SDK correctly with the supported surface."""
 
     @patch("langchain_youdotcom._utilities.You")
     def test_results_calls_sdk(self, mock_you_cls: MagicMock) -> None:
-        """results() creates a client and calls search.unified."""
+        """results() creates a client and calls client.search."""
         response = make_search_response(web=[make_web_hit(snippets=["result"])])
         mock_client = MagicMock()
-        mock_client.search.unified.return_value = response
+        mock_client.search.return_value = response
         mock_client.__enter__ = MagicMock(return_value=mock_client)
         mock_client.__exit__ = MagicMock(return_value=False)
         mock_you_cls.return_value = mock_client
@@ -210,15 +250,38 @@ class TestSDKIntegration:
         docs = wrapper.results("test query")
 
         assert mock_you_cls.call_args.kwargs["api_key_auth"] == "test-key"
-        mock_client.search.unified.assert_called_once_with(query="test query", count=5)
+        mock_client.search.assert_called_once_with(query="test query", count=5)
         assert len(docs) == 1
 
     @patch("langchain_youdotcom._utilities.You")
+    def test_search_forwards_deprecated_livecrawl(
+        self, mock_you_cls: MagicMock
+    ) -> None:
+        """Deprecated livecrawl/livecrawl_formats are forwarded to the SDK."""
+        response = make_search_response(web=[make_web_hit(snippets=["result"])])
+        mock_client = MagicMock()
+        mock_client.search.return_value = response
+        mock_client.__enter__ = MagicMock(return_value=mock_client)
+        mock_client.__exit__ = MagicMock(return_value=False)
+        mock_you_cls.return_value = mock_client
+
+        wrapper = YouAPIWrapper(
+            ydc_api_key="test-key",
+            livecrawl="web",
+            livecrawl_formats=["html", "markdown"],
+        )
+        wrapper.results("test query")
+
+        call_kwargs = mock_client.search.call_args.kwargs
+        assert call_kwargs["livecrawl"] == "web"
+        assert call_kwargs["livecrawl_formats"] == ["html", "markdown"]
+
+    @patch("langchain_youdotcom._utilities.You")
     def test_contents_calls_sdk(self, mock_you_cls: MagicMock) -> None:
-        """contents() creates a client and calls contents.generate."""
+        """contents() creates a client and calls client.contents."""
         page = make_contents_page()
         mock_client = MagicMock()
-        mock_client.contents.generate.return_value = [page]
+        mock_client.contents.return_value = [page]
         mock_client.__enter__ = MagicMock(return_value=mock_client)
         mock_client.__exit__ = MagicMock(return_value=False)
         mock_you_cls.return_value = mock_client
@@ -226,7 +289,10 @@ class TestSDKIntegration:
         wrapper = YouAPIWrapper(ydc_api_key="test-key")
         docs = wrapper.contents(["https://example.com"])
 
-        mock_client.contents.generate.assert_called_once()
+        mock_client.contents.assert_called_once()
+        call_kwargs = mock_client.contents.call_args.kwargs
+        assert call_kwargs["urls"] == ["https://example.com"]
+        assert mock_client.contents.call_args is not None
         assert len(docs) == 1
 
     @patch("langchain_youdotcom._utilities.You")
@@ -248,6 +314,7 @@ class TestSDKIntegration:
         call_kwargs = mock_client.research.call_args.kwargs
         assert call_kwargs["input"] == "test query"
         assert call_kwargs["research_effort"] == ResearchEffort.LITE
+        assert call_kwargs["timeout_ms"] == 300_000
         assert result.output.content == "Research answer with [1] citations."
 
     @patch("langchain_youdotcom._utilities.You")
@@ -284,6 +351,194 @@ class TestSDKIntegration:
         assert isinstance(result, str)
         assert "Research answer" in result
         assert "## Sources" in result
+
+    @patch("langchain_youdotcom._utilities.You")
+    def test_raw_finance_calls_sdk(self, mock_you_cls: MagicMock) -> None:
+        """raw_finance() creates a client and calls client.finance_research."""
+        response = make_finance_research_response()
+        mock_client = MagicMock()
+        mock_client.finance_research.return_value = response
+        mock_client.__enter__ = MagicMock(return_value=mock_client)
+        mock_client.__exit__ = MagicMock(return_value=False)
+        mock_you_cls.return_value = mock_client
+
+        wrapper = YouAPIWrapper(ydc_api_key="test-key")
+        result = wrapper.raw_finance("NVDA earnings")
+
+        mock_client.finance_research.assert_called_once()
+        call_kwargs = mock_client.finance_research.call_args.kwargs
+        assert call_kwargs["input"] == "NVDA earnings"
+        assert call_kwargs["research_effort"] == "deep"
+        assert call_kwargs["timeout_ms"] == 300_000
+        assert result.output.content == "Finance answer with [1] citations."
+
+    @patch("langchain_youdotcom._utilities.You")
+    async def test_raw_finance_async_calls_sdk(self, mock_you_cls: MagicMock) -> None:
+        """raw_finance_async() calls ``client.finance_research_async``."""
+        response = make_finance_research_response()
+        mock_client = MagicMock()
+        mock_client.finance_research_async = AsyncMock(return_value=response)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_you_cls.return_value = mock_client
+
+        wrapper = YouAPIWrapper(ydc_api_key="test-key")
+        result = await wrapper.raw_finance_async("AAPL cash flow")
+
+        mock_client.finance_research_async.assert_called_once()
+        call_kwargs = mock_client.finance_research_async.call_args.kwargs
+        assert call_kwargs["input"] == "AAPL cash flow"
+        assert call_kwargs["research_effort"] == "deep"
+        assert call_kwargs["timeout_ms"] == 300_000
+        assert result.output.content == "Finance answer with [1] citations."
+
+    @patch("langchain_youdotcom._utilities.You")
+    def test_finance_text_returns_markdown(self, mock_you_cls: MagicMock) -> None:
+        """finance_text() returns formatted markdown via SDK."""
+        response = make_finance_research_response(
+            content="Revenue grew 40% YoY.",
+        )
+        mock_client = MagicMock()
+        mock_client.finance_research.return_value = response
+        mock_client.__enter__ = MagicMock(return_value=mock_client)
+        mock_client.__exit__ = MagicMock(return_value=False)
+        mock_you_cls.return_value = mock_client
+
+        wrapper = YouAPIWrapper(ydc_api_key="test-key")
+        result = wrapper.finance_text("NVDA revenue")
+
+        assert "Revenue grew 40% YoY." in result
+        assert "## Sources" in result
+
+    @patch("langchain_youdotcom._utilities.You")
+    def test_raw_answer_calls_sdk(self, mock_you_cls: MagicMock) -> None:
+        """raw_answer() calls ``client.answer`` with all filter kwargs."""
+        response = make_answer_response(answer="cited")
+        mock_client = MagicMock()
+        mock_client.answer.return_value = response
+        mock_client.__enter__ = MagicMock(return_value=mock_client)
+        mock_client.__exit__ = MagicMock(return_value=False)
+        mock_you_cls.return_value = mock_client
+
+        wrapper = YouAPIWrapper(ydc_api_key="k")
+        wrapper.raw_answer(
+            "what is RAG",
+            freshness="week",
+            country="US",
+            language="EN",
+            safesearch="moderate",
+            include_domains=["example.com"],
+        )
+
+        call_kwargs = mock_client.answer.call_args.kwargs
+        assert call_kwargs["query"] == "what is RAG"
+        assert call_kwargs["freshness"] == "week"
+        assert call_kwargs["country"] == "US"
+        assert call_kwargs["language"] == "EN"
+        assert call_kwargs["safesearch"] == "moderate"
+        assert call_kwargs["include_domains"] == ["example.com"]
+        assert call_kwargs["timeout_ms"] == 300_000
+
+    @patch("langchain_youdotcom._utilities.You")
+    async def test_raw_answer_async_calls_sdk(self, mock_you_cls: MagicMock) -> None:
+        """raw_answer_async() calls ``client.answer_async``."""
+        response = make_answer_response(answer="async cited")
+        mock_client = MagicMock()
+        mock_client.answer_async = AsyncMock(return_value=response)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_you_cls.return_value = mock_client
+
+        wrapper = YouAPIWrapper(ydc_api_key="k")
+        await wrapper.raw_answer_async("what is RAG")
+
+        mock_client.answer_async.assert_called_once()
+
+    def test_answer_text_includes_citations(self) -> None:
+        """answer_text() returns markdown with a Citations section."""
+        response = make_answer_response(
+            answer="RAG combines retrieval and generation [1].",
+            citations=[
+                {
+                    "source": "https://arxiv.org/abs/2005.11401",
+                    "excerpts": ["RAG paper abstract."],
+                },
+            ],
+        )
+        with patch(
+            "langchain_youdotcom.YouAPIWrapper.raw_answer",
+            return_value=response,
+        ):
+            result = YouAPIWrapper(ydc_api_key="k").answer_text("what is RAG")
+
+        assert "RAG combines retrieval and generation [1]." in result
+        assert "## Citations" in result
+        assert "https://arxiv.org/abs/2005.11401" in result
+        assert "RAG paper abstract." in result
+
+
+class TestAnswerValidation:
+    """Pre-flight validation of Answer Args."""
+
+    def test_query_over_400_chars_rejected(self) -> None:
+        """Server rejects queries over 400 chars; surface locally."""
+        with pytest.raises(ValueError, match="400"):
+            YouAPIWrapper()._answer_params("x" * 401)
+
+    def test_empty_query_rejected(self) -> None:
+        """Empty query is rejected without an HTTP call."""
+        with pytest.raises(ValueError, match="query"):
+            YouAPIWrapper()._answer_params("")
+
+    def test_whitespace_only_query_rejected(self) -> None:
+        """Whitespace-only query is rejected."""
+        with pytest.raises(ValueError, match="query"):
+            YouAPIWrapper()._answer_params("   ")
+
+    def test_include_with_exclude_rejected(self) -> None:
+        """include_domains conflicts with exclude_domains."""
+        with pytest.raises(ValueError, match="include_domains"):
+            YouAPIWrapper()._answer_params(
+                "q",
+                include_domains=["a.com"],
+                exclude_domains=["b.com"],
+            )
+
+    def test_include_with_boost_rejected(self) -> None:
+        """include_domains conflicts with boost_domains."""
+        with pytest.raises(ValueError, match="include_domains"):
+            YouAPIWrapper()._answer_params(
+                "q",
+                include_domains=["a.com"],
+                boost_domains=["b.com"],
+            )
+
+    def test_exclude_and_boost_pass(self) -> None:
+        """exclude_domains and boost_domains can co-exist."""
+        params = YouAPIWrapper()._answer_params(
+            "q",
+            exclude_domains=["b.com"],
+            boost_domains=["c.com"],
+        )
+        assert params["exclude_domains"] == ["b.com"]
+        assert params["boost_domains"] == ["c.com"]
+
+    def test_params_include_filters_when_set(self) -> None:
+        """All filter kwargs reach the param dict."""
+        params = YouAPIWrapper()._answer_params(
+            "q",
+            freshness="week",
+            country="US",
+            language="EN",
+            safesearch="moderate",
+        )
+        assert params == {
+            "query": "q",
+            "freshness": "week",
+            "country": "US",
+            "language": "EN",
+            "safesearch": "moderate",
+        }
 
 
 class TestResearchFormatting:
@@ -339,6 +594,12 @@ class TestResearchFormatting:
         assert params["input"] == "my query"
         assert params["research_effort"] == ResearchEffort.DEEP
 
+    def test_research_params_rejects_frontier(self) -> None:
+        """Frontier is task-only; sync API returns 422, so reject locally."""
+        wrapper = YouAPIWrapper(ydc_api_key="k", research_effort="frontier")
+        with pytest.raises(ValueError, match="frontier"):
+            wrapper._research_params("my query")
+
 
 class TestFinanceResearchParams:
     """Finance Research parameter building."""
@@ -360,109 +621,3 @@ class TestFinanceResearchParams:
         wrapper = YouAPIWrapper(ydc_api_key="k", research_effort="lite")
         with pytest.raises(ValueError, match="Finance Research"):
             wrapper._finance_research_params("query")
-
-
-class TestFinanceResearchParsing:
-    """Parsing of Finance Research JSON responses."""
-
-    def test_parse_finance_research_json(self) -> None:
-        """Parsed object works with _format_research_response."""
-        data = make_finance_research_json(
-            content="NVIDIA revenue grew due to data center.",
-            sources=[
-                {"url": "https://sec.gov/nvda", "title": "NVIDIA 10-K"},
-            ],
-        )
-        wrapper = YouAPIWrapper(ydc_api_key="k")
-        response = wrapper._parse_finance_research_json(data)
-        result = wrapper._format_research_response(response)
-
-        assert "NVIDIA revenue grew" in result
-        assert "## Sources" in result
-        assert "[NVIDIA 10-K](https://sec.gov/nvda)" in result
-
-    def test_parse_finance_research_json_no_sources(self) -> None:
-        """Parsed object with no sources omits sources section."""
-        data = make_finance_research_json(content="Just an answer.", sources=[])
-        wrapper = YouAPIWrapper(ydc_api_key="k")
-        response = wrapper._parse_finance_research_json(data)
-        result = wrapper._format_research_response(response)
-
-        assert result == "Just an answer."
-        assert "## Sources" not in result
-
-    def test_parse_finance_research_json_source_no_title(self) -> None:
-        """Source with no title falls back to URL."""
-        data = make_finance_research_json(
-            sources=[{"url": "https://sec.gov/filing", "title": None}],
-        )
-        wrapper = YouAPIWrapper(ydc_api_key="k")
-        response = wrapper._parse_finance_research_json(data)
-        result = wrapper._format_research_response(response)
-
-        assert "[https://sec.gov/filing](https://sec.gov/filing)" in result
-
-
-class TestFinanceResearchHTTPCalls:
-    """Verify the wrapper makes correct HTTP calls for Finance Research."""
-
-    @patch("langchain_youdotcom._utilities.httpx.Client")
-    def test_raw_finance_calls_httpx(self, mock_client_cls: MagicMock) -> None:
-        """raw_finance() posts to the Finance Research API."""
-        mock_resp = MagicMock()
-        mock_resp.json.return_value = make_finance_research_json()
-        mock_resp.raise_for_status = MagicMock()
-        mock_client = MagicMock()
-        mock_client.post.return_value = mock_resp
-        mock_client.__enter__ = MagicMock(return_value=mock_client)
-        mock_client.__exit__ = MagicMock(return_value=False)
-        mock_client_cls.return_value = mock_client
-
-        wrapper = YouAPIWrapper(ydc_api_key="test-key")
-        result = wrapper.raw_finance("NVDA earnings")
-
-        mock_client.post.assert_called_once_with(
-            "https://api.you.com/v1/finance_research",
-            json={"input": "NVDA earnings", "research_effort": "deep"},
-        )
-        assert result.output.content == "Finance answer with [1] citations."
-
-    @patch("langchain_youdotcom._utilities.httpx.AsyncClient")
-    async def test_raw_finance_async_calls_httpx(
-        self, mock_client_cls: MagicMock
-    ) -> None:
-        """raw_finance_async() posts to the Finance Research API."""
-        mock_resp = MagicMock()
-        mock_resp.json.return_value = make_finance_research_json()
-        mock_resp.raise_for_status = MagicMock()
-        mock_client = MagicMock()
-        mock_client.post = AsyncMock(return_value=mock_resp)
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=False)
-        mock_client_cls.return_value = mock_client
-
-        wrapper = YouAPIWrapper(ydc_api_key="test-key")
-        result = await wrapper.raw_finance_async("AAPL cash flow")
-
-        mock_client.post.assert_called_once()
-        assert result.output.content == "Finance answer with [1] citations."
-
-    @patch("langchain_youdotcom._utilities.httpx.Client")
-    def test_finance_text_returns_markdown(self, mock_client_cls: MagicMock) -> None:
-        """finance_text() returns formatted markdown."""
-        mock_resp = MagicMock()
-        mock_resp.json.return_value = make_finance_research_json(
-            content="Revenue grew 40% YoY."
-        )
-        mock_resp.raise_for_status = MagicMock()
-        mock_client = MagicMock()
-        mock_client.post.return_value = mock_resp
-        mock_client.__enter__ = MagicMock(return_value=mock_client)
-        mock_client.__exit__ = MagicMock(return_value=False)
-        mock_client_cls.return_value = mock_client
-
-        wrapper = YouAPIWrapper(ydc_api_key="test-key")
-        result = wrapper.finance_text("NVDA revenue")
-
-        assert "Revenue grew 40% YoY." in result
-        assert "## Sources" in result

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "langchain-youdotcom"
-version = "0.3.1"
+version = "0.4.0"
 description = "An integration package connecting You.com and LangChain"
 readme = "README.md"
 license = { text = "MIT" }
@@ -22,7 +22,7 @@ classifiers = [
 requires-python = ">=3.10.0,<4.0.0"
 dependencies = [
     "langchain-core>=1.0.0,<2.0.0",
-    "youdotcom>=2.3.0,<3.0.0",
+    "youdotcom>=3.1.2,<4",
 ]
 
 [project.urls]

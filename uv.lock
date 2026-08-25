@@ -137,7 +137,7 @@ name = "exceptiongroup"
 version = "1.3.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "typing-extensions", marker = "python_full_version < '3.13'" },
+    { name = "typing-extensions" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/50/79/66800aadf48771f6b62f7eb014e352e5d06856655206165d775e675a02c9/exceptiongroup-1.3.1.tar.gz", hash = "sha256:8b412432c6055b0b7d14c310000ae93352ed6754f70fa8f7c34141f91c4e3219", size = 30371, upload-time = "2025-11-21T23:01:54.787Z" }
 wheels = [
@@ -253,7 +253,7 @@ wheels = [
 
 [[package]]
 name = "langchain-youdotcom"
-version = "0.3.1"
+version = "0.4.0"
 source = { editable = "." }
 dependencies = [
     { name = "langchain-core" },
@@ -288,7 +288,7 @@ typing = [
 [package.metadata]
 requires-dist = [
     { name = "langchain-core", specifier = ">=1.0.0,<2.0.0" },
-    { name = "youdotcom", specifier = ">=2.3.0,<3.0.0" },
+    { name = "youdotcom", specifier = ">=3.1.2,<4" },
 ]
 
 [package.metadata.requires-dev]
@@ -1211,16 +1211,16 @@ wheels = [
 
 [[package]]
 name = "youdotcom"
-version = "2.3.0"
+version = "3.1.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "httpcore" },
     { name = "httpx" },
     { name = "pydantic" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/3c/6b/1d3dd77f5968086d1606972697074ddd07b72abcb514c38a39feda77031f/youdotcom-2.3.0.tar.gz", hash = "sha256:f35e4ba53bb7f235100e7b7fcccfdcb84e9a08c85bb053d4e6c76bf29ecc7547", size = 71806, upload-time = "2026-03-04T03:21:11.067Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/2d/99/77c5b7246ca4ffbb0ae0fc98757836b2a6cd114e2454e2bc73cd52c2bef0/youdotcom-3.1.2.tar.gz", hash = "sha256:73b4801203b6fca15f0531c5c34ae1dc680d2d41edf83748f572023c6137916d", size = 141929, upload-time = "2026-08-21T06:46:55.788Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/eb/0c/a57beaa961914c9014ee7ffc16697844874e4a7910848f11a55b45b58619/youdotcom-2.3.0-py3-none-any.whl", hash = "sha256:5750d0bcc88cf666b88e36e116c9775607db5d3491a02afad219eb9d4ec97eb0", size = 89388, upload-time = "2026-03-04T03:21:09.308Z" },
+    { url = "https://files.pythonhosted.org/packages/e8/bb/258571903378fc865b87b3749c460dad7a8534bbccf8c4a3873203359536/youdotcom-3.1.2-py3-none-any.whl", hash = "sha256:1ef5c66871e0fe3320d5fa0869ba59420511560648e9fb793f9c7f1e0e7d641c", size = 114867, upload-time = "2026-08-21T06:46:54.5Z" },
 ]
 
 [[package]]

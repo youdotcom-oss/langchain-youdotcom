@@ -125,18 +125,60 @@ def make_contents_page(
     return page
 
 
-def make_finance_research_json(
+def make_finance_research_response(
     *,
     content: str = "Finance answer with [1] citations.",
     sources: list[dict[str, Any]] | None = None,
-) -> dict[str, Any]:
-    """Build a JSON dict matching the Finance Research API response shape."""
+) -> MagicMock:
+    """Build a mock matching the SDK's :class:`FinanceResearchResponse`."""
     if sources is None:
         sources = [{"url": "https://finance.example.com", "title": "Finance Source"}]
-    return {
-        "output": {
-            "content": content,
-            "content_type": "text",
-            "sources": sources,
-        }
-    }
+    # SDK's FinanceResearchSource declares only `url` and optional `title`.
+    src_objects = [MagicMock(url=s["url"], title=s.get("title")) for s in sources]
+    output = MagicMock(content=content, content_type="text", sources=src_objects)
+    return MagicMock(output=output)
+
+
+def make_answer_response(
+    *,
+    answer: str = "Cited answer with [1] citation.",
+    citations: list[dict[str, Any]] | None = None,
+    web_results: list[dict[str, Any]] | None = None,
+) -> MagicMock:
+    """Build a mock matching the SDK's :class:`AnswerResponse`."""
+    if citations is None:
+        citations = [
+            {
+                "source": "https://example.com",
+                "excerpts": ["supporting excerpt"],
+            },
+        ]
+    if web_results is None:
+        web_results = [
+            {
+                "url": "https://example.com",
+                "title": "Example",
+                "snippets": ["snippet"],
+            },
+        ]
+    citation_objects = [
+        MagicMock(
+            source=c["source"],
+            excerpts=c.get("excerpts"),
+        )
+        for c in citations
+    ]
+    web_objects = [
+        MagicMock(
+            url=w["url"],
+            title=w["title"],
+            snippets=w.get("snippets"),
+            page_age=w.get("page_age"),
+        )
+        for w in web_results
+    ]
+    return MagicMock(
+        answer=answer,
+        citations=citation_objects,
+        results=MagicMock(web=web_objects),
+    )
