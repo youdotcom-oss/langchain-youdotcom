@@ -4,7 +4,7 @@
 [![PyPI - License](https://img.shields.io/pypi/l/langchain-youdotcom)](https://opensource.org/licenses/MIT)
 [![PyPI - Downloads](https://img.shields.io/pepy/dt/langchain-youdotcom)](https://pypistats.org/packages/langchain-youdotcom)
 
-LangChain partner package for [You.com](https://you.com) search, content extraction, research, and finance research APIs.
+LangChain partner package for [You.com](https://you.com) search, content extraction, research, finance research, and answer APIs.
 
 [Installation](#installation) | [Credentials](#credentials) | [Tools](#tools) | [Retriever](#retriever) | [API Wrapper](#youapiwrapper) | [Resources](#resources)
 
@@ -30,22 +30,31 @@ from langchain_youdotcom import YouSearchTool, YouAPIWrapper
 tool = YouSearchTool(api_wrapper=YouAPIWrapper(ydc_api_key="your-api-key"))
 ```
 
+Every outbound request emits an `X-Client-Info` header that identifies the call as originating from `langchain-youdotcom`, so You.com can attribute usage correctly. No action required.
+
 ## Tools
 
 ### YouSearchTool
 
-Search the web with up to date results. Supports geographic filtering, freshness controls, and optional live-crawling for full page content. Great for monitoring mentions, pulling recent news, or feeding live data into agent workflows.
+Search the web with up to date results. Supports geographic filtering, freshness controls, optional full-page content extraction, and licensed knowledge results. Great for monitoring mentions, pulling recent news, or feeding live data into agent workflows.
 
 **Instantiation parameters** (set on `YouAPIWrapper`):
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `count` | `int \| None` | `None` | Max results per section, 1-100 |
+| `boost_domains` | `list[str] \| None` | `None` | Domains to prefer in ranking (up to 500). Can combine with `exclude_domains` but not `include_domains` |
+| `count` | `int \| None` | `None` | Max results per section, 1-100. Caps the web and news sections only, not `knowledge` |
 | `country` | `str \| None` | `None` | Two-letter country code to focus results geographically |
+| `crawl_timeout` | `int \| None` | `None` | Per-page crawl timeout in seconds for search; the API defaults to 10. Most useful with `extraction` in `full_page` mode. The client's own request timeout is set to this plus 20s of headroom, so a large value is actually honored rather than being cut off by httpx's 5s default. The server crawls pages in parallel, so this budget does not need to scale with `count`. Does not apply to `contents()`, which takes its own argument |
+| `exclude_domains` | `list[str] \| None` | `None` | Domains to exclude (up to 500). Can combine with `boost_domains` but not `include_domains` |
+| `extraction` | `dict \| None` | `None` | Controls how page content is attached to each result. Replaces the deprecated `livecrawl`. `extraction_mode` is required: `"highlights"` returns the relevant passages of each page, `"full_page"` returns whole-page content. `extraction_source` (`"blend"`, `"cache"`, or `"fetch"`) and `full_page` apply to `"full_page"` only. Cannot be combined with `livecrawl` |
 | `freshness` | `str \| None` | `None` | Filter by recency: `day`, `week`, `month`, or `year` |
+| `include_domains` | `list[str] \| None` | `None` | Domains to exclusively include (up to 500). Cannot combine with `exclude_domains` or `boost_domains`; the wrapper raises `ValueError` locally |
+| `knowledge` | `str \| None` | `None` | Set to `"core"` to include knowledge results backed by licensed data providers. `"core"` is the only accepted value. Omit to skip them |
 | `language` | `str \| None` | `None` | BCP-47 language code for results |
-| `livecrawl` | `str \| None` | `None` | Fetch full page content: `web`, `news`, or `all` |
-| `livecrawl_formats` | `str \| None` | `None` | Format for livecrawled content: `html` or `markdown` |
+| `livecrawl` | `str \| None` | `None` | Deprecated by the SDK; will be removed in a future release. Use `extraction` instead. Fetch full page content: `web`, `news`, or `all` |
+| `livecrawl_formats` | `list[str] \| None` | `None` | Deprecated by the SDK; will be removed in a future release. Use `extraction.full_page.extraction_formats` instead. Format for livecrawled content as a list, e.g. `["html", "markdown"]` |
+| `n_snippets_per_hit` | `int \| None` | `None` | Max excerpts to keep per hit — applies to snippets, and to the passages returned by `extraction_mode="highlights"`. Unset keeps all |
 | `offset` | `int \| None` | `None` | Pagination offset, 0-9 |
 | `safesearch` | `str \| None` | `None` | Content filter: `off`, `moderate`, or `strict` |
 | `k` | `int \| None` | `None` | Max documents to return |
@@ -62,8 +71,7 @@ tool = YouSearchTool(
         count=5,
         country="US",
         freshness="week",
-        livecrawl="web",
-        livecrawl_formats="markdown",
+        safesearch="moderate",
     ),
 )
 
@@ -71,6 +79,36 @@ tool = YouSearchTool(
 result = tool.invoke("latest AI news")
 print(result)
 ```
+
+**Full-page content instead of snippets:**
+
+```python
+from langchain_youdotcom import YouAPIWrapper
+
+wrapper = YouAPIWrapper(
+    count=5,
+    extraction={
+        "extraction_mode": "full_page",
+        "extraction_source": "blend",
+        "full_page": {"extraction_formats": ["markdown"]},
+    },
+)
+docs = wrapper.results("latest AI news")
+```
+
+`extraction` replaces the deprecated `livecrawl` / `livecrawl_formats`. Passing both raises a `ValueError` from the SDK.
+
+**Licensed knowledge results:**
+
+```python
+wrapper = YouAPIWrapper(count=5, knowledge="core")
+docs = wrapper.results("NVIDIA revenue FY2025")
+```
+
+Knowledge results are cards backed by licensed data providers such as encyclopedias, market-data firms, and reference publishers. Two things to know:
+
+- **They have no `url`.** Attribution entries are provider credits rather than citations, so knowledge documents carry `title`, `type`, `source`, and `attribution` in `metadata` but no `url` key. Code that reads `doc.metadata["url"]` should check `doc.metadata["source"] != "knowledge"` first.
+- **`count` does not cap them.** Up to 25 relevant knowledge results can arrive regardless of `count`. Only `k` bounds the returned list. They are emitted before web and news results, so a pinned `k` keeps them.
 
 **Using with an agent:**
 
@@ -104,9 +142,10 @@ Content format and timeout are configured when calling the wrapper directly (see
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `urls` | `list[str]` | — | URLs to extract content from (required) |
-| `formats` | `list[str] \| None` | `["markdown", "metadata"]` | Output formats: `markdown`, `html`, and/or `metadata` |
-| `crawl_timeout` | `float \| None` | `None` | Per-URL crawl timeout in seconds |
+| `urls` | `list[str]` | — | URLs to extract content from (required). **Maximum 10 per request** — the API rejects more with a 422, and the wrapper raises `ValueError` locally instead. Split larger batches across calls |
+| `formats` | `list[str] \| None` | `["markdown"]` | Output formats: `markdown`, `html`, and/or `metadata`. `metadata` is deprecated by the SDK and emits a `DeprecationWarning`, so it is no longer requested by default — pass it explicitly if you need the `site_name` and `favicon_url` metadata keys |
+| `crawl_timeout` | `int \| None` | `None` | Per-URL crawl timeout in seconds |
+| `max_age` | `int \| None` | `None` | Maximum allowed age of cached content in seconds. Cached content older than this is ignored and the page is re-fetched. Must be 0 or greater. Defaults to no age limit |
 
 ```python
 from langchain_youdotcom import YouContentsTool
@@ -120,11 +159,15 @@ print(result)
 
 Get a comprehensive, cited answer to a complex question. The Research API searches the web, reads multiple sources, and synthesizes a detailed markdown response with inline numbered citations. Perfect for competitive analysis, market research, technical due diligence, or any question that needs more than a simple search result.
 
+The output ends with a `## Sources` section listing each source by title and URL, followed by that source's supporting excerpts. Those excerpts can be long, so deep research output can grow large — use `raw_research()` when you want the structured response without the excerpts.
+
 **Instantiation parameters** (set on `YouAPIWrapper`):
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `research_effort` | `str \| None` | `None` | Controls depth and speed (see levels below) |
+| `output_schema` | `dict \| None` | `None` | JSON Schema constraining the structured output. Passed through to the SDK unmodified |
+| `source_control` | `dict \| None` | `None` | Controls which sources research may draw on: `include_domains`, `exclude_domains`, `boost_domains`, `freshness`, `country`. Research only — for Search, use the top-level domain fields. Unlike `extraction`, the SDK does not reject unknown keys here, so a misspelled key is silently ignored |
 
 **Research effort levels:**
 
@@ -134,6 +177,30 @@ Get a comprehensive, cited answer to a complex question. The Research API search
 | `standard` | Balanced speed and depth (default) |
 | `deep` | More time researching and cross-referencing sources |
 | `exhaustive` | Most thorough option for complex research tasks |
+| `frontier` | Highest-quality tier. Only supported by the task-based API (`background=true`); sending it to the sync API returns a 422, so `YouResearchTool` does not handle it — use the SDK directly for `frontier` runs. |
+
+**Structured output:**
+
+Setting `output_schema` makes the API return a JSON object in `output.content` instead of markdown, and `content_type` becomes `"object"`. Two consequences:
+
+- `research_text()` serializes that object to indented JSON so it still returns a string. Use `raw_research()` when you want the parsed dict.
+- `output_schema` is not supported with `research_effort="lite"` — the API returns a 422, so the wrapper raises `ValueError` locally instead.
+
+The API requires every object in the schema to define `properties`, set `additionalProperties: false`, and list every property in `required`:
+
+```python
+wrapper = YouAPIWrapper(
+    research_effort="deep",
+    output_schema={
+        "type": "object",
+        "properties": {"summary": {"type": "string"}},
+        "required": ["summary"],
+        "additionalProperties": False,
+    },
+)
+raw = wrapper.raw_research("explain quantum entanglement")
+print(raw.output.content)  # {"summary": "..."}
+```
 
 **Invocation args:**
 
@@ -191,6 +258,59 @@ result = tool.invoke("compare gross margins of Apple, Microsoft, and Google over
 print(result)
 ```
 
+### YouAnswerTool
+
+Get a single, synthesized answer to a focused live-web question with inline citations. The Answer API is optimized for short, single-question lookups (faster than Research) and returns a synthesized response plus a `## Citations` section listing each cited source by title and URL, with its description and supporting excerpts.
+
+The 0.4.0 release adds `YouAnswerTool` as the recommended entry point for any single-question workflow. Reach for `YouResearchTool` only when the question needs synthesis across multiple sources.
+
+**Invocation args:**
+
+- `query` (required, `str`): The live-web question. Max 400 characters.
+- `freshness` (optional, `str`): Recency filter: `day`, `week`, `month`, `year`, or a date range.
+- `country` (optional, `str`): ISO 3166-1 alpha-2 country code for geographical focus.
+- `language` (optional, `str`): BCP 47 language tag.
+- `safesearch` (optional, `str`): Content filter: `off`, `moderate`, or `strict`.
+- `include_domains` (optional, `list[str]`): Restrict results to specific domains.
+- `exclude_domains` (optional, `list[str]`): Exclude specific domains. Cannot be combined with `include_domains`.
+- `boost_domains` (optional, `list[str]`): Boost specific domains in the ranking. Cannot be combined with `include_domains`.
+
+Every one of these is also a `YouAPIWrapper` field. Wrapper-level config acts as the default and a per-call filter overrides it, so a wrapper configured with `country="US"` behaves consistently across Search and Answer. The `include_domains` combinations are validated against the merged result, so an illegal pairing formed partly by wrapper config is still rejected locally.
+
+```python
+from langchain_youdotcom import YouAnswerTool
+
+tool = YouAnswerTool()
+result = tool.invoke({"query": "what is retrieval augmented generation"})
+print(result)
+```
+
+With filters:
+
+```python
+result = tool.invoke(
+    {
+        "query": "latest python release",
+        "freshness": "week",
+        "country": "US",
+        "language": "EN",
+        "safesearch": "moderate",
+    }
+)
+```
+
+With domain restriction:
+
+```python
+result = tool.invoke(
+    {
+        "query": "langchain release notes",
+        "exclude_domains": ["pinterest.com"],
+        "boost_domains": ["github.com"],
+    }
+)
+```
+
 ## Retriever
 
 The simplest way to get You.com search results as LangChain documents. Accepts all search parameters from [YouSearchTool](#yousearchtool).
@@ -213,13 +333,19 @@ With search parameters:
 retriever = YouRetriever(
     k=5,
     count=10,
-    livecrawl="web",
-    livecrawl_formats="markdown",
     country="US",
     freshness="week",
     safesearch="moderate",
+    knowledge="core",
+    extraction={
+        "extraction_mode": "full_page",
+        "extraction_source": "blend",
+        "full_page": {"extraction_formats": ["markdown"]},
+    },
 )
 ```
+
+`YouRetriever` subclasses `YouAPIWrapper`, so every parameter above — including `extraction` and `knowledge` — is inherited. The [knowledge result caveats](#yousearchtool) apply here too: those documents have no `url` metadata key, and `count` does not cap them.
 
 ## YouAPIWrapper
 
@@ -244,8 +370,14 @@ raw = wrapper.raw_results("latest AI news")
 ```python
 pages = wrapper.contents(
     ["https://example.com"],
-    formats=["markdown", "metadata"],
+    formats=["markdown"],
     crawl_timeout=30,
+)
+
+# opt back into the deprecated metadata format for site_name / favicon_url
+pages = wrapper.contents(
+    ["https://example.com"],
+    formats=["markdown", "metadata"],
 )
 ```
 
@@ -265,11 +397,29 @@ raw = wrapper.raw_research("explain quantum entanglement")
 # finance research -> formatted markdown with sources
 text = wrapper.finance_text("what drove NVIDIA's revenue growth in FY2025")
 
-# raw response (parsed from JSON)
+# raw SDK response (FinanceResearchResponse)
 raw = wrapper.raw_finance("compare AAPL and MSFT gross margins")
 ```
 
-Async variants are available for all methods: `results_async`, `raw_results_async`, `contents_async`, `research_text_async`, `raw_research_async`, `finance_text_async`, `raw_finance_async`.
+**Answer:**
+
+```python
+# answer -> formatted markdown with citations
+text = wrapper.answer_text(
+    "what is retrieval augmented generation",
+    freshness="week",
+    country="US",
+    safesearch="moderate",
+)
+
+# raw SDK response
+raw = wrapper.raw_answer(
+    "what is retrieval augmented generation",
+    include_domains=["arxiv.org"],
+)
+```
+
+Async variants are available for all methods: `results_async`, `raw_results_async`, `contents_async`, `research_text_async`, `raw_research_async`, `finance_text_async`, `raw_finance_async`, `answer_text_async`, `raw_answer_async`.
 
 ## Resources
 
@@ -278,6 +428,7 @@ Async variants are available for all methods: `results_async`, `raw_results_asyn
 - [Contents API reference](https://docs.you.com/api-reference/contents)
 - [Research API reference](https://docs.you.com/api-reference/research)
 - [Finance Research API reference](https://docs.you.com/api-reference/finance-research)
+- [Answer API reference](https://docs.you.com/api-reference/answer)
 - [You.com API keys](https://you.com/platform/api-keys)
 
 ## Development

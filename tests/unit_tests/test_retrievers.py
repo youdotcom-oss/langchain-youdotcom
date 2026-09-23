@@ -37,11 +37,38 @@ class TestYouRetriever:
         assert retriever.count == 10
 
     @patch("langchain_youdotcom._utilities.You")
+    def test_inherits_and_forwards_new_search_fields(
+        self, mock_you_cls: MagicMock
+    ) -> None:
+        """``extraction`` and ``knowledge`` reach the SDK through ``invoke()``.
+
+        ``YouRetriever`` subclasses ``YouAPIWrapper``, so new wrapper fields
+        arrive with no retriever-side change. This guards that the inheritance
+        actually carries them into the SDK call rather than dropping them.
+        """
+        response = make_search_response(web=[make_web_hit(snippets=["hello"])])
+        mock_client = MagicMock()
+        mock_client.search.return_value = response
+        mock_client.__enter__ = MagicMock(return_value=mock_client)
+        mock_client.__exit__ = MagicMock(return_value=False)
+        mock_you_cls.return_value = mock_client
+
+        extraction = {"extraction_mode": "highlights"}
+        retriever = YouRetriever(
+            ydc_api_key="test-key", extraction=extraction, knowledge="core"
+        )
+        retriever.invoke("test query")
+
+        call_kwargs = mock_client.search.call_args.kwargs
+        assert call_kwargs["extraction"] == extraction
+        assert call_kwargs["knowledge"] == "core"
+
+    @patch("langchain_youdotcom._utilities.You")
     def test_invoke_returns_documents(self, mock_you_cls: MagicMock) -> None:
         """invoke() returns documents from search results."""
         response = make_search_response(web=[make_web_hit(snippets=["hello world"])])
         mock_client = MagicMock()
-        mock_client.search.unified.return_value = response
+        mock_client.search.return_value = response
         mock_client.__enter__ = MagicMock(return_value=mock_client)
         mock_client.__exit__ = MagicMock(return_value=False)
         mock_you_cls.return_value = mock_client

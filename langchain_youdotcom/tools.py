@@ -37,6 +37,60 @@ class YouFinanceResearchInput(BaseModel):
     )
 
 
+class YouAnswerInput(BaseModel):
+    """Input schema for :class:`YouAnswerTool`.
+
+    Mirrors the ``POST /v1/answer`` request body. The Answer API rejects
+    ``include_domains`` paired with either ``exclude_domains`` or
+    ``boost_domains``; the wrapper raises a ``ValueError`` locally so callers
+    fail fast instead of round-tripping a 422.
+    """
+
+    query: str = Field(
+        description="Focused live-web question. Max 400 characters.",
+    )
+    freshness: str | None = Field(
+        default=None,
+        description=(
+            "Freshness filter: ``day``, ``week``, ``month``, ``year``, or "
+            "``YYYY-MM-DDtoYYYY-MM-DD``."
+        ),
+    )
+    country: str | None = Field(
+        default=None,
+        description="ISO 3166-1 alpha-2 country code for geographical focus.",
+    )
+    language: str | None = Field(
+        default=None,
+        description="BCP 47 language tag.",
+    )
+    safesearch: str | None = Field(
+        default=None,
+        description="Content filter: ``off``, ``moderate``, or ``strict``.",
+    )
+    include_domains: list[str] | None = Field(
+        default=None,
+        description=(
+            "Domains to exclusively include (up to 500). Cannot combine with "
+            "``exclude_domains`` or ``boost_domains``."
+        ),
+    )
+    exclude_domains: list[str] | None = Field(
+        default=None,
+        description=(
+            "Domains to exclude (up to 500). Can combine with ``boost_domains`` "
+            "but not ``include_domains``."
+        ),
+    )
+    boost_domains: list[str] | None = Field(
+        default=None,
+        description=(
+            "Domains to prefer in ranking (up to 500). Can combine with "
+            "``exclude_domains`` but not ``include_domains``."
+        ),
+    )
+
+
 def _format_docs(docs: list[Document]) -> str:
     """Join document contents with separators."""
     parts: list[str] = []
@@ -241,3 +295,63 @@ class YouFinanceResearchTool(BaseTool):
             Finance research answer formatted as markdown with sources.
         """
         return await self.api_wrapper.finance_text_async(query)
+
+
+class YouAnswerTool(BaseTool):
+    """Tool that queries the You.com Answer API.
+
+    Returns a single synthesized natural-language answer with inline citations
+    and an appended ``## Citations`` section that lists each cited source URL
+    along with any supporting excerpts the server provided.
+
+    Requires a ``YDC_API_KEY`` environment variable or an explicit key on the
+    ``api_wrapper``.
+
+    Example:
+        .. code-block:: python
+
+            from langchain_youdotcom import YouAnswerTool
+
+            tool = YouAnswerTool()
+            result = tool.invoke({"query": "what is retrieval augmented generation"})
+    """
+
+    name: str = "you_answer"
+    description: str = (
+        "Get a synthesized, cited answer to a single focused live-web question. "
+        "Supports freshness, country, language, safesearch, and domain include / "
+        "exclude / boost filters. Returns the synthesized answer plus a Citations "
+        "section listing each source URL."
+    )
+    api_wrapper: YouAPIWrapper = Field(default_factory=YouAPIWrapper)
+    args_schema: type[BaseModel] = YouAnswerInput
+
+    def _run(self, query: str, **filters: Any) -> str:
+        """Run the You.com Answer tool.
+
+        Args:
+            query: The live-web question. Max 400 characters.
+            **filters: Answer-API filters forwarded to ``api_wrapper.answer_text``.
+                Supported keys: ``freshness``, ``country``, ``language``,
+                ``safesearch``, ``include_domains``, ``exclude_domains``,
+                ``boost_domains``.
+
+        Returns:
+            Synthesized answer formatted as markdown with citations.
+        """
+        return self.api_wrapper.answer_text(query, **filters)
+
+    async def _arun(self, query: str, **filters: Any) -> str:
+        """Async run the You.com Answer tool.
+
+        Args:
+            query: The live-web question. Max 400 characters.
+            **filters: Answer filters forwarded to ``api_wrapper.answer_text_async``.
+                Supported keys: ``freshness``, ``country``, ``language``,
+                ``safesearch``, ``include_domains``, ``exclude_domains``,
+                ``boost_domains``.
+
+        Returns:
+            Synthesized answer formatted as markdown with citations.
+        """
+        return await self.api_wrapper.answer_text_async(query, **filters)
