@@ -19,7 +19,7 @@ class YouRetriever(BaseRetriever, YouAPIWrapper):
 
     Inherits all configuration fields from
     :class:`~langchain_youdotcom.YouAPIWrapper` (``ydc_api_key``,
-    ``k``, ``count``, ``livecrawl``, etc.).
+    ``k``, ``count``, ``extraction``, ``knowledge``, etc.).
 
     Example:
         .. code-block:: python
